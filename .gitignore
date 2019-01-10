@@ -10,3 +10,7 @@ Cargo.lock
 **/*.rs.bk
 
 /node_modules
+package-lock.json
+*.wasm
+wasm2.js
+*.ts
