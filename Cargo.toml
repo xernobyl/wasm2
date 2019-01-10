@@ -1,0 +1,29 @@
+[package]
+name = "wasm2"
+version = "0.0.0"
+authors = ["Tiago <xernobyl@hotmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+js-sys = "*"
+wasm-bindgen = "*"
+rand = "*"
+
+[dependencies.web-sys]
+version = "*"
+features = [
+	'CssStyleDeclaration',
+	'Document',
+	'Element',
+	'HtmlCanvasElement',
+	'HtmlElement',
+	'Node',
+	'WebGlBuffer',
+	'WebGl2RenderingContext',
+	'WebGlProgram',
+	'WebGlShader',
+	'Window',
+]
