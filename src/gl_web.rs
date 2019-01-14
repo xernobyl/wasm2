@@ -1,10 +1,10 @@
 use crate::gl_sys::GLSys;
-use js_sys::WebAssembly;
+//use js_sys::WebAssembly;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{WebGlProgram, WebGl2RenderingContext, WebGlShader, HtmlCanvasElement};
-use std::cell::RefCell;
-use std::rc::Rc;
+//use std::cell::RefCell;
+//use std::rc::Rc;
 //use rand::Rng;
 
 
@@ -38,7 +38,7 @@ extern "C" {
 }
 
 
-/* fn request_animation_frame(f: &Closure<FnMut()>) {
+fn request_animation_frame(f: &Closure<FnMut()>) {
 	web_sys::window().unwrap()
 		.request_animation_frame(f.as_ref().unchecked_ref())
 		.expect("should register `requestAnimationFrame` OK");
@@ -82,7 +82,6 @@ pub fn compile_shader(
 	}
 }
 
-
 pub fn link_program<'a, T: IntoIterator<Item = &'a WebGlShader>>(
 	gl: &WebGl2RenderingContext,
 	shaders: T,
@@ -108,12 +107,10 @@ pub fn link_program<'a, T: IntoIterator<Item = &'a WebGlShader>>(
 	}
 }
 
- */
-
 
 pub struct GLWeb {
-	canvas: Option<HtmlCanvasElement>,
-	gl: Option<WebGl2RenderingContext>,
+	canvas: HtmlCanvasElement,
+	gl: WebGl2RenderingContext,
 }
 
 
@@ -127,20 +124,15 @@ impl<'a> GLSys<'a> for GLWeb {
 		//let canvas = document.get_element_by_id("canvas").unwrap();
 		//let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
 
-		let gl = canvas
-		.get_context("webgl2")?
-		.unwrap()
-		.dyn_into::<WebGl2RenderingContext>()?;
+		let gl = canvas.get_context("webgl2")?.unwrap().dyn_into::<WebGl2RenderingContext>()?;
 
-		let vert_shader = compile_shader(&gl, WebGl2RenderingContext::VERTEX_SHADER, VERTEX_SHADER_0)?;
+		/*let vert_shader = compile_shader(&gl, WebGl2RenderingContext::VERTEX_SHADER, VERTEX_SHADER_0)?;
 		let frag_shader = compile_shader(&gl, WebGl2RenderingContext::FRAGMENT_SHADER, FRAGMENT_SHADER_0)?;
 		let program = link_program(&gl, [vert_shader, frag_shader].iter())?;
 		gl.use_program(Some(&program));
 
 		let vertices: [f32; 9] = [-0.7, -0.7, 0.0, 0.7, -0.7, 0.0, 0.0, 0.7, 0.0];
-		let memory_buffer = wasm_bindgen::memory()
-			.dyn_into::<WebAssembly::Memory>()?
-			.buffer();
+		let memory_buffer = wasm_bindgen::memory().dyn_into::<WebAssembly::Memory>()?.buffer();
 		let vertices_location = vertices.as_ptr() as u32 / 4;
 		let vert_array = js_sys::Float32Array::new(&memory_buffer)
 			.subarray(vertices_location, vertices_location + vertices.len() as u32);
@@ -153,7 +145,7 @@ impl<'a> GLSys<'a> for GLWeb {
 			WebGl2RenderingContext::STATIC_DRAW,
 		);
 		gl.vertex_attrib_pointer_with_i32(0, 3, WebGl2RenderingContext::FLOAT, false, 0, 0);
-		gl.enable_vertex_attrib_array(0);
+		gl.enable_vertex_attrib_array(0);*/
 
 		/* gl.clear_color(0.0, 0.0, 0.0, 1.0);
 		gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
@@ -164,7 +156,10 @@ impl<'a> GLSys<'a> for GLWeb {
 			(vertices.len() / 3) as i32,
 		); */
 
-		Ok(())
+		Result::Ok(GLWeb {
+			canvas: canvas,
+			gl: gl,
+		})
 	}
 
 	fn start_loop(&self) {
