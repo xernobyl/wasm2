@@ -4,13 +4,7 @@ pub mod gl_sys;
 use wasm_bindgen::prelude::*;
 
 use self::gl_web::GLWeb;
-
-
-#[wasm_bindgen]
-extern "C" {
-	#[wasm_bindgen(js_namespace = console, js_name = log)]
-	fn log(s: &str);
-}
+use self::gl_sys::GLSys;
 
 
 #[wasm_bindgen(start)]

@@ -1,13 +1,20 @@
+use crate::gl_sys::GLSys;
 use js_sys::WebAssembly;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{WebGlProgram, WebGl2RenderingContext, WebGlShader, HtmlCanvasElement};
 use std::cell::RefCell;
 use std::rc::Rc;
-use rand::Rng;
+//use rand::Rng;
 
-use gl_sys;
 
+/*
+#[wasm_bindgen]
+extern "C" {
+	#[wasm_bindgen(js_namespace = console, js_name = log)]
+	fn log(s: &str);
+}
+*/
 
 const FRAGMENT_SHADER_0: &str = r#"
 void main() {
@@ -31,7 +38,7 @@ extern "C" {
 }
 
 
-fn request_animation_frame(f: &Closure<FnMut()>) {
+/* fn request_animation_frame(f: &Closure<FnMut()>) {
 	web_sys::window().unwrap()
 		.request_animation_frame(f.as_ref().unchecked_ref())
 		.expect("should register `requestAnimationFrame` OK");
@@ -48,12 +55,6 @@ fn draw_frame(gl: &WebGl2RenderingContext, frame: &usize) {
 		(0.5 + f64::from(*frame as u32) * GOLDEN_RATIO).fract() as f32,
 		(0.75 + f64::from(*frame as u32) * GOLDEN_RATIO).fract() as f32);
 	gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-}
-
-
-#[wasm_bindgen(start)]
-pub fn web_main() -> Result<(), JsValue> {
-
 }
 
 
@@ -107,37 +108,29 @@ pub fn link_program<'a, T: IntoIterator<Item = &'a WebGlShader>>(
 	}
 }
 
-
-fn init_gl() -> Result<(), JsValue> {
-	let document = web_sys::window().unwrap().document().unwrap();
-	let canvas = document.create_element("canvas")?.dyn_into::<web_sys::HtmlCanvasElement>()?;
-
-	//let canvas = document.get_element_by_id("canvas").unwrap();
-	//let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
-
-	let context = canvas
-			.get_context("webgl2")?
-			.unwrap()
-			.dyn_into::<WebGl2RenderingContext>()?;
-}
+ */
 
 
 pub struct GLWeb {
-	canvas: HtmlCanvasElement,
-	gl: WebGl2RenderingContext,
-}
-
-
-impl GLWeb {
-
+	canvas: Option<HtmlCanvasElement>,
+	gl: Option<WebGl2RenderingContext>,
 }
 
 
 impl<'a> GLSys<'a> for GLWeb {
-	fn new() -> Result<Self, &'a str> {
+	fn new() -> Result<Self, &'a str> where Self: Sized {
 		log(format!("Initializing WebGL").as_ref());
 
-		let (_canvas, gl) = init_gl()?;
+		let document = web_sys::window().unwrap().document().unwrap();
+		let canvas = document.create_element("canvas")?.dyn_into::<web_sys::HtmlCanvasElement>()?;
+
+		//let canvas = document.get_element_by_id("canvas").unwrap();
+		//let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
+
+		let gl = canvas
+		.get_context("webgl2")?
+		.unwrap()
+		.dyn_into::<WebGl2RenderingContext>()?;
 
 		let vert_shader = compile_shader(&gl, WebGl2RenderingContext::VERTEX_SHADER, VERTEX_SHADER_0)?;
 		let frag_shader = compile_shader(&gl, WebGl2RenderingContext::FRAGMENT_SHADER, FRAGMENT_SHADER_0)?;
@@ -174,8 +167,8 @@ impl<'a> GLSys<'a> for GLWeb {
 		Ok(())
 	}
 
-
 	fn start_loop(&self) {
+		/*
 		let f = Rc::new(RefCell::new(None));
 		let g = f.clone();
 
@@ -183,12 +176,13 @@ impl<'a> GLSys<'a> for GLWeb {
 
 		*g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
 			// let _ = f.borrow_mut().take(); // kill
-			draw_frame(&gl, &frame);
+			draw_frame(&self.gl, &frame);
 			request_animation_frame(f.borrow().as_ref().unwrap());
 
 			frame += 1;
 		}) as Box<FnMut()>));
 
 		request_animation_frame(g.borrow().as_ref().unwrap());
+		*/
 	}
 }
