@@ -114,17 +114,18 @@ pub struct GLWeb {
 }
 
 
-impl<'a> GLSys<'a> for GLWeb {
-	fn new() -> Result<Self, &'a str> where Self: Sized {
-		log(format!("Initializing WebGL").as_ref());
+impl GLSys for GLWeb {
+	fn new() -> Result<Self, &'static str> where Self: Sized {
+		/* log(format!("Initializing WebGL").as_ref());
 
 		let document = web_sys::window().unwrap().document().unwrap();
-		let canvas = document.create_element("canvas")?.dyn_into::<web_sys::HtmlCanvasElement>()?;
+		//let canvas = document.create_element("canvas")?.dyn_into::<web_sys::HtmlCanvasElement>()?;
 
-		//let canvas = document.get_element_by_id("canvas").unwrap();
-		//let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
+		let canvas = document.get_element_by_id("canvas").unwrap();
+		let canvas: HtmlCanvasElement = canvas.dyn_into::<HtmlCanvasElement>()?;
 
-		let gl = canvas.get_context("webgl2")?.unwrap().dyn_into::<WebGl2RenderingContext>()?;
+		let gl = canvas.get_context("webgl2")?.unwrap();
+		let gl: WebGl2RenderingContext = gl.dyn_into::<WebGl2RenderingContext>()?;
 
 		/*let vert_shader = compile_shader(&gl, WebGl2RenderingContext::VERTEX_SHADER, VERTEX_SHADER_0)?;
 		let frag_shader = compile_shader(&gl, WebGl2RenderingContext::FRAGMENT_SHADER, FRAGMENT_SHADER_0)?;
@@ -159,8 +160,11 @@ impl<'a> GLSys<'a> for GLWeb {
 		Result::Ok(GLWeb {
 			canvas: canvas,
 			gl: gl,
-		})
+		}) */
+
+		Result::Err("")
 	}
+
 
 	fn start_loop(&self) {
 		/*
@@ -180,4 +184,18 @@ impl<'a> GLSys<'a> for GLWeb {
 		request_animation_frame(g.borrow().as_ref().unwrap());
 		*/
 	}
+}
+
+
+pub fn gl_init() -> Result<(web_sys::HtmlCanvasElement, WebGl2RenderingContext), ()> {
+	let document = web_sys::window().unwrap().document().unwrap();
+	let canvas = document.get_element_by_id("canvas").unwrap();
+	let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
+
+	let context = canvas
+			.get_context("webgl2")?
+			.unwrap()
+			.dyn_into::<WebGl2RenderingContext>()?;
+
+	(canvas, context)
 }
