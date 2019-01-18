@@ -3,8 +3,8 @@ use crate::gl_sys::GLSys;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{WebGlProgram, WebGl2RenderingContext, WebGlShader, HtmlCanvasElement};
-//use std::cell::RefCell;
-//use std::rc::Rc;
+use std::cell::RefCell;
+use std::rc::Rc;
 //use rand::Rng;
 
 
@@ -42,19 +42,6 @@ fn request_animation_frame(f: &Closure<FnMut()>) {
 	web_sys::window().unwrap()
 		.request_animation_frame(f.as_ref().unchecked_ref())
 		.expect("should register `requestAnimationFrame` OK");
-}
-
-
-fn draw_frame(gl: &WebGl2RenderingContext, frame: &usize) {
-	const GOLDEN_RATIO: f64 = 1.6180339887498948420;
-	// let mut rng = rand::thread_rng();
-	// gl.clear_color(rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0));
-	gl.clear_color(
-		(0.0 + f64::from(*frame as u32) * GOLDEN_RATIO).fract() as f32,
-		(0.25 + f64::from(*frame as u32) * GOLDEN_RATIO).fract() as f32,
-		(0.5 + f64::from(*frame as u32) * GOLDEN_RATIO).fract() as f32,
-		(0.75 + f64::from(*frame as u32) * GOLDEN_RATIO).fract() as f32);
-	gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 }
 
 
@@ -114,18 +101,41 @@ pub struct GLWeb {
 }
 
 
+impl GLWeb {
+	fn convert_error(value: JsValue) -> &'static str {
+		return "Error";
+	}
+
+	fn draw_frame(gl: &WebGl2RenderingContext, frame: &usize) {
+	const GOLDEN_RATIO: f64 = 1.6180339887498948420;
+	// let mut rng = rand::thread_rng();
+	// gl.clear_color(rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0));
+	gl.clear_color(
+		(0.0 + f64::from(*frame as u32) * GOLDEN_RATIO).fract() as f32,
+		(0.25 + f64::from(*frame as u32) * GOLDEN_RATIO).fract() as f32,
+		(0.5 + f64::from(*frame as u32) * GOLDEN_RATIO).fract() as f32,
+		(0.75 + f64::from(*frame as u32) * GOLDEN_RATIO).fract() as f32);
+	gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+}
+
+
+
+}
+
+
 impl GLSys for GLWeb {
 	fn new() -> Result<Self, &'static str> where Self: Sized {
-		/* log(format!("Initializing WebGL").as_ref());
+		log(format!("Initializing WebGL").as_ref());
 
 		let document = web_sys::window().unwrap().document().unwrap();
 		//let canvas = document.create_element("canvas")?.dyn_into::<web_sys::HtmlCanvasElement>()?;
 
-		let canvas = document.get_element_by_id("canvas").unwrap();
-		let canvas: HtmlCanvasElement = canvas.dyn_into::<HtmlCanvasElement>()?;
+		let canvas = document.get_element_by_id("canvas");
+		let canvas = canvas.unwrap();
+		let canvas = canvas.dyn_into::<HtmlCanvasElement>().unwrap();
 
-		let gl = canvas.get_context("webgl2")?.unwrap();
-		let gl: WebGl2RenderingContext = gl.dyn_into::<WebGl2RenderingContext>()?;
+		let gl = canvas.get_context("webgl2").unwrap().unwrap();
+		let gl = gl.dyn_into::<WebGl2RenderingContext>().unwrap();
 
 		/*let vert_shader = compile_shader(&gl, WebGl2RenderingContext::VERTEX_SHADER, VERTEX_SHADER_0)?;
 		let frag_shader = compile_shader(&gl, WebGl2RenderingContext::FRAGMENT_SHADER, FRAGMENT_SHADER_0)?;
@@ -160,14 +170,11 @@ impl GLSys for GLWeb {
 		Result::Ok(GLWeb {
 			canvas: canvas,
 			gl: gl,
-		}) */
-
-		Result::Err("")
+		})
 	}
 
 
 	fn start_loop(&self) {
-		/*
 		let f = Rc::new(RefCell::new(None));
 		let g = f.clone();
 
@@ -175,27 +182,16 @@ impl GLSys for GLWeb {
 
 		*g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
 			// let _ = f.borrow_mut().take(); // kill
-			draw_frame(&self.gl, &frame);
-			request_animation_frame(f.borrow().as_ref().unwrap());
-
+			draw_frame(&self);
 			frame += 1;
+			request_animation_frame(f.borrow().as_ref().unwrap());
 		}) as Box<FnMut()>));
 
 		request_animation_frame(g.borrow().as_ref().unwrap());
-		*/
 	}
 }
 
 
-pub fn gl_init() -> Result<(web_sys::HtmlCanvasElement, WebGl2RenderingContext), ()> {
-	let document = web_sys::window().unwrap().document().unwrap();
-	let canvas = document.get_element_by_id("canvas").unwrap();
-	let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
+fn draw_frame(glweb: &GLWeb) {
 
-	let context = canvas
-			.get_context("webgl2")?
-			.unwrap()
-			.dyn_into::<WebGl2RenderingContext>()?;
-
-	(canvas, context)
 }
