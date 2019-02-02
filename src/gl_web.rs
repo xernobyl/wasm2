@@ -101,21 +101,23 @@ pub struct GLWeb {
 
 
 impl GLWeb {
-	fn convert_error(value: JsValue) -> &'static str {
-		return "Error";
-	}
-
 	fn frame_callback(&mut self, frame_time: f64) -> bool {
-		log(format!("{}", frame_time).as_ref());
+		//let frame_time = window().unwrap().performance().unwrap().now() / 1000.0;
 
-		const GOLDEN_RATIO: f64 = 1.6180339887498948420;
-		// let mut rng = rand::thread_rng();
-		// gl.clear_color(rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0));
+		// log(format!("{}", frame_time / 1000.0).as_ref());
+
+		/*const GOLDEN_RATIO: f64 = 1.6180339887498948420;
 		self.gl.clear_color(
 			(0.0 + f64::from(self.frame as u32) * GOLDEN_RATIO).fract() as f32,
 			(0.25 + f64::from(self.frame as u32) * GOLDEN_RATIO).fract() as f32,
 			(0.5 + f64::from(self.frame as u32) * GOLDEN_RATIO).fract() as f32,
-			(0.75 + f64::from(self.frame as u32) * GOLDEN_RATIO).fract() as f32);
+			(0.75 + f64::from(self.frame as u32) * GOLDEN_RATIO).fract() as f32);*/
+
+		self.gl.clear_color(
+			f32::sin(frame_time as f32 + 34.05321775) * 0.5 + 0.5,
+			f32::sin(frame_time as f32 + 4.34598743) * 0.5 + 0.5,
+			f32::sin(frame_time as f32 + 1.234559876) * 0.5 + 0.5,
+			0.0);
 		self.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 		self.frame = self.frame + 1;
 
@@ -133,9 +135,6 @@ impl GLSys for GLWeb {
 			let canvas = document
 				.create_element("canvas")?
 				.dyn_into::<HtmlCanvasElement>()?;
-
-			// canvas.set_width(1280);
-			// canvas.set_height(720);
 
 			canvas.style().set_property("position", "fixed")?;
 			canvas.style().set_property("left", "0")?;
@@ -160,14 +159,16 @@ impl GLSys for GLWeb {
 
 		{
 			let canvas = canvas.clone();
-			let closure = Closure::wrap(Box::new(move |event: FocusEvent| {
-				log(format!("RESIZE: {} {} {} {}", event.page_x(), event.page_y(), event.layer_x(), event.layer_y()).as_ref());
-				let (x, y) = (event.page_x(), event.page_y());
-				if x != 0 && y != 0 {
-					canvas.set_width(event.page_x() as u32);
-					canvas.set_height(event.page_y() as u32);
+			let closure = Closure::wrap(Box::new(move || {
+				let width = canvas.client_width() as u32;
+				let height = canvas.client_height() as u32;
+
+				log(format!("RESIZE: {} {}", width, height).as_ref());
+				if width != 0 && height != 0 {
+					canvas.set_width(width);
+					canvas.set_height(height);
 				}
-			}) as Box<dyn FnMut(_)>);
+			}) as Box<dyn FnMut()>);
 
 			window().unwrap().set_onresize(Option::Some(closure.as_ref().unchecked_ref()));
 			closure.forget();
@@ -211,7 +212,7 @@ impl GLSys for GLWeb {
 	}
 
 	fn start_loop(self) {
-		fn request_animation_frame(f: &Closure<FnMut()>) {
+		fn request_animation_frame(f: &Closure<FnMut(f64)>) {
 			window().unwrap()
 				.request_animation_frame(f.as_ref().unchecked_ref())
 				.expect("should register `requestAnimationFrame` OK");
@@ -223,12 +224,14 @@ impl GLSys for GLWeb {
 		let f = Rc::new(RefCell::new(None));
 		let g = f.clone();
 
-		*g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+		let closure = Some(Closure::wrap(Box::new(move |timestamp| {
 			if let Some(the_self) = Rc::get_mut(&mut rc) {
-				the_self.frame_callback(0.0);
+				the_self.frame_callback(timestamp);
 			};
 			request_animation_frame(f.borrow().as_ref().unwrap());
-		}) as Box<FnMut()>));
+		}) as Box<dyn FnMut(_)>));
+
+		*g.borrow_mut() = closure;
 
 		request_animation_frame(g.borrow().as_ref().unwrap());
 	}
