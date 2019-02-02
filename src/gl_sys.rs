@@ -2,6 +2,6 @@
 
 
 pub trait GLSys {
-	fn new() -> Result<Self, &'static str> where Self: Sized;
-	fn start_loop(&self);
+	fn new() -> Result<Self, String> where Self: Sized;
+	fn start_loop(self);
 }

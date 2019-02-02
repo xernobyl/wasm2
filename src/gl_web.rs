@@ -2,10 +2,15 @@ use crate::gl_sys::GLSys;
 //use js_sys::WebAssembly;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{WebGlProgram, WebGl2RenderingContext, WebGlShader, HtmlCanvasElement};
+use web_sys::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 //use rand::Rng;
+
+/*
+Useful example for callbacks and stuff I guess:
+https://rustwasm.github.io/wasm-bindgen/examples/paint.html?highlight=create_element#srclibrs
+*/
 
 
 /*
@@ -39,7 +44,7 @@ extern "C" {
 
 
 fn request_animation_frame(f: &Closure<FnMut()>) {
-	web_sys::window().unwrap()
+	window().unwrap()
 		.request_animation_frame(f.as_ref().unchecked_ref())
 		.expect("should register `requestAnimationFrame` OK");
 }
@@ -96,8 +101,9 @@ pub fn link_program<'a, T: IntoIterator<Item = &'a WebGlShader>>(
 
 
 pub struct GLWeb {
-	canvas: HtmlCanvasElement,
+	canvas: Rc<HtmlCanvasElement>,
 	gl: WebGl2RenderingContext,
+	frame: u64,
 }
 
 
@@ -106,36 +112,75 @@ impl GLWeb {
 		return "Error";
 	}
 
-	fn draw_frame(gl: &WebGl2RenderingContext, frame: &usize) {
-	const GOLDEN_RATIO: f64 = 1.6180339887498948420;
-	// let mut rng = rand::thread_rng();
-	// gl.clear_color(rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0));
-	gl.clear_color(
-		(0.0 + f64::from(*frame as u32) * GOLDEN_RATIO).fract() as f32,
-		(0.25 + f64::from(*frame as u32) * GOLDEN_RATIO).fract() as f32,
-		(0.5 + f64::from(*frame as u32) * GOLDEN_RATIO).fract() as f32,
-		(0.75 + f64::from(*frame as u32) * GOLDEN_RATIO).fract() as f32);
-	gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-}
-
-
-
+	fn frame_callback(&mut self) -> bool {
+		const GOLDEN_RATIO: f64 = 1.6180339887498948420;
+		// let mut rng = rand::thread_rng();
+		// gl.clear_color(rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0));
+		self.gl.clear_color(
+			(0.0 + f64::from(self.frame as u32) * GOLDEN_RATIO).fract() as f32,
+			(0.25 + f64::from(self.frame as u32) * GOLDEN_RATIO).fract() as f32,
+			(0.5 + f64::from(self.frame as u32) * GOLDEN_RATIO).fract() as f32,
+			(0.75 + f64::from(self.frame as u32) * GOLDEN_RATIO).fract() as f32);
+		self.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+		self.frame = self.frame + 1;
+		true
+	}
 }
 
 
 impl GLSys for GLWeb {
-	fn new() -> Result<Self, &'static str> where Self: Sized {
-		log(format!("Initializing WebGL").as_ref());
+	fn new() -> Result<Self, String> where Self: Sized {
+		fn create_canvas_element() -> Result<(HtmlCanvasElement, WebGl2RenderingContext), JsValue> {
+			let document = window().ok_or("Can't get window")?
+				.document().ok_or("Can't get document")?;
 
-		let document = web_sys::window().unwrap().document().unwrap();
-		//let canvas = document.create_element("canvas")?.dyn_into::<web_sys::HtmlCanvasElement>()?;
+			let canvas = document
+				.create_element("canvas")?
+				.dyn_into::<HtmlCanvasElement>()?;
 
-		let canvas = document.get_element_by_id("canvas");
-		let canvas = canvas.unwrap();
-		let canvas = canvas.dyn_into::<HtmlCanvasElement>().unwrap();
+			// canvas.set_width(1280);
+			// canvas.set_height(720);
 
-		let gl = canvas.get_context("webgl2").unwrap().unwrap();
-		let gl = gl.dyn_into::<WebGl2RenderingContext>().unwrap();
+			canvas.style().set_property("position", "fixed")?;
+			canvas.style().set_property("left", "0")?;
+			canvas.style().set_property("top", "0")?;
+			canvas.style().set_property("width", "100%")?;
+			canvas.style().set_property("height", "100%")?;
+
+			document.body().unwrap().append_child(&canvas)?;
+
+			let gl = canvas.get_context("webgl2")?.unwrap().dyn_into::<WebGl2RenderingContext>()?;
+
+			Result::Ok((canvas, gl))
+		}
+
+		fn js_to_str(value: JsValue) -> String {
+			value.as_string().unwrap_or("???".to_string())
+		}
+
+		let (canvas, gl) = create_canvas_element().map_err(js_to_str)?;
+		let canvas = Rc::new(canvas);
+
+		{
+			let canvas = canvas.clone();
+			let closure = Closure::wrap(Box::new(move |event: FocusEvent| {
+				log(format!("RESIZE: {} {} {} {}", event.page_x(), event.page_y(), event.layer_x(), event.layer_y()).as_ref());
+				let (x, y) = (event.page_x(), event.page_y());
+				if x != 0 && y != 0 {
+					canvas.set_width(event.page_x() as u32);
+					canvas.set_height(event.page_y() as u32);
+				}
+			}) as Box<dyn FnMut(_)>);
+
+			window().unwrap().set_onresize(Option::Some(closure.as_ref().unchecked_ref()));
+			closure.forget();
+    }
+
+		Result::Ok(GLWeb {
+			canvas: canvas,
+			gl: gl,
+			frame: 0,
+		})
 
 		/*let vert_shader = compile_shader(&gl, WebGl2RenderingContext::VERTEX_SHADER, VERTEX_SHADER_0)?;
 		let frag_shader = compile_shader(&gl, WebGl2RenderingContext::FRAGMENT_SHADER, FRAGMENT_SHADER_0)?;
@@ -166,24 +211,22 @@ impl GLSys for GLWeb {
 			0,
 			(vertices.len() / 3) as i32,
 		); */
-
-		Result::Ok(GLWeb {
-			canvas: canvas,
-			gl: gl,
-		})
 	}
 
+	fn start_loop(self) {
+		log(format!("Starting loop...").as_ref());
 
-	fn start_loop(&self) {
 		let f = Rc::new(RefCell::new(None));
 		let g = f.clone();
-
-		let mut frame: usize = 0;
+		unsafe {
+			CURRENT_CONTEXT = Option::Some(self);
+		}
 
 		*g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-			// let _ = f.borrow_mut().take(); // kill
-			draw_frame(&self);
-			frame += 1;
+			if let Some(context) = unsafe { &mut CURRENT_CONTEXT } {
+				context.frame_callback();
+			}
+
 			request_animation_frame(f.borrow().as_ref().unwrap());
 		}) as Box<FnMut()>));
 
@@ -191,7 +234,4 @@ impl GLSys for GLWeb {
 	}
 }
 
-
-fn draw_frame(glweb: &GLWeb) {
-
-}
+static mut CURRENT_CONTEXT: Option<GLWeb> = Option::None;
