@@ -43,13 +43,6 @@ extern "C" {
 }
 
 
-fn request_animation_frame(f: &Closure<FnMut()>) {
-	window().unwrap()
-		.request_animation_frame(f.as_ref().unchecked_ref())
-		.expect("should register `requestAnimationFrame` OK");
-}
-
-
 pub fn compile_shader(
 	gl: &WebGl2RenderingContext,
 	shader_type: u32,
@@ -102,7 +95,7 @@ pub fn link_program<'a, T: IntoIterator<Item = &'a WebGlShader>>(
 
 pub struct GLWeb {
 	canvas: Rc<HtmlCanvasElement>,
-	gl: WebGl2RenderingContext,
+	gl: Rc<WebGl2RenderingContext>,
 	frame: u64,
 }
 
@@ -112,7 +105,9 @@ impl GLWeb {
 		return "Error";
 	}
 
-	fn frame_callback(&mut self) -> bool {
+	fn frame_callback(&mut self, frame_time: f64) -> bool {
+		log(format!("{}", frame_time).as_ref());
+
 		const GOLDEN_RATIO: f64 = 1.6180339887498948420;
 		// let mut rng = rand::thread_rng();
 		// gl.clear_color(rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0), rng.gen_range(0.0, 1.0));
@@ -123,6 +118,7 @@ impl GLWeb {
 			(0.75 + f64::from(self.frame as u32) * GOLDEN_RATIO).fract() as f32);
 		self.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 		self.frame = self.frame + 1;
+
 		true
 	}
 }
@@ -160,6 +156,7 @@ impl GLSys for GLWeb {
 
 		let (canvas, gl) = create_canvas_element().map_err(js_to_str)?;
 		let canvas = Rc::new(canvas);
+		let gl = Rc::new(gl);
 
 		{
 			let canvas = canvas.clone();
@@ -214,24 +211,25 @@ impl GLSys for GLWeb {
 	}
 
 	fn start_loop(self) {
-		log(format!("Starting loop...").as_ref());
-
-		let f = Rc::new(RefCell::new(None));
-		let g = f.clone();
-		unsafe {
-			CURRENT_CONTEXT = Option::Some(self);
+		fn request_animation_frame(f: &Closure<FnMut()>) {
+			window().unwrap()
+				.request_animation_frame(f.as_ref().unchecked_ref())
+				.expect("should register `requestAnimationFrame` OK");
 		}
 
-		*g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-			if let Some(context) = unsafe { &mut CURRENT_CONTEXT } {
-				context.frame_callback();
-			}
+		log(format!("Starting loop...").as_ref());
 
+		let mut rc = Rc::new(self);
+		let f = Rc::new(RefCell::new(None));
+		let g = f.clone();
+
+		*g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+			if let Some(the_self) = Rc::get_mut(&mut rc) {
+				the_self.frame_callback(0.0);
+			};
 			request_animation_frame(f.borrow().as_ref().unwrap());
 		}) as Box<FnMut()>));
 
 		request_animation_frame(g.borrow().as_ref().unwrap());
 	}
 }
-
-static mut CURRENT_CONTEXT: Option<GLWeb> = Option::None;
