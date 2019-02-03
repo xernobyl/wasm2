@@ -1,5 +1,11 @@
+/*
+Useful example for callbacks and stuff here:
+https://rustwasm.github.io/wasm-bindgen/examples/paint.html?highlight=create_element#srclibrs
+https://rustwasm.github.io/wasm-bindgen/api/js_sys/
+https://rustwasm.github.io/wasm-bindgen/api/web_sys/
+*/
+
 use crate::gl_sys::GLSys;
-//use js_sys::WebAssembly;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::*;
@@ -7,19 +13,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 //use rand::Rng;
 
-/*
-Useful example for callbacks and stuff I guess:
-https://rustwasm.github.io/wasm-bindgen/examples/paint.html?highlight=create_element#srclibrs
-*/
-
-
-/*
 #[wasm_bindgen]
 extern "C" {
 	#[wasm_bindgen(js_namespace = console, js_name = log)]
 	fn log(s: &str);
 }
-*/
+
 
 const FRAGMENT_SHADER_0: &str = r#"
 void main() {
@@ -34,13 +33,6 @@ void main() {
 	gl_Position = position;
 }
 "#;
-
-
-#[wasm_bindgen]
-extern "C" {
-	#[wasm_bindgen(js_namespace = console, js_name = log)]
-	fn log(s: &str);
-}
 
 
 pub fn compile_shader(
@@ -102,22 +94,20 @@ pub struct GLWeb {
 
 impl GLWeb {
 	fn frame_callback(&mut self, frame_time: f64) -> bool {
-		//let frame_time = window().unwrap().performance().unwrap().now() / 1000.0;
-
 		// log(format!("{}", frame_time / 1000.0).as_ref());
 
-		/*const GOLDEN_RATIO: f64 = 1.6180339887498948420;
+		const GOLDEN_RATIO: f64 = 1.6180339887498948420;
 		self.gl.clear_color(
-			(0.0 + f64::from(self.frame as u32) * GOLDEN_RATIO).fract() as f32,
-			(0.25 + f64::from(self.frame as u32) * GOLDEN_RATIO).fract() as f32,
-			(0.5 + f64::from(self.frame as u32) * GOLDEN_RATIO).fract() as f32,
-			(0.75 + f64::from(self.frame as u32) * GOLDEN_RATIO).fract() as f32);*/
+			0.0 + f64::from(frame_time * GOLDEN_RATIO).fract() as f32,
+			0.25 + f64::from(frame_time * GOLDEN_RATIO).fract() as f32,
+			0.5 + f64::from(frame_time * GOLDEN_RATIO).fract() as f32,
+			0.75 + f64::from(frame_time * GOLDEN_RATIO).fract() as f32);
 
-		self.gl.clear_color(
-			f32::sin(frame_time as f32 + 34.05321775) * 0.5 + 0.5,
-			f32::sin(frame_time as f32 + 4.34598743) * 0.5 + 0.5,
-			f32::sin(frame_time as f32 + 1.234559876) * 0.5 + 0.5,
-			0.0);
+		/*self.gl.clear_color(
+			f32::sin(frame_time as f32 / 1000.0 + 34.05321775) * 0.5 + 0.5,
+			f32::sin(frame_time as f32 / 1000.0 + 4.34598743) * 0.5 + 0.5,
+			f32::sin(frame_time as f32 / 1000.0 + 1.234559876) * 0.5 + 0.5,
+			0.0);*/
 		self.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 		self.frame = self.frame + 1;
 
@@ -144,6 +134,14 @@ impl GLSys for GLWeb {
 
 			document.body().unwrap().append_child(&canvas)?;
 
+			let width = canvas.client_width() as u32;
+			let height = canvas.client_height() as u32;
+
+			if width != 0 && height != 0 {
+				canvas.set_width(width);
+				canvas.set_height(height);
+			}
+
 			let gl = canvas.get_context("webgl2")?.unwrap().dyn_into::<WebGl2RenderingContext>()?;
 
 			Result::Ok((canvas, gl))
@@ -163,7 +161,6 @@ impl GLSys for GLWeb {
 				let width = canvas.client_width() as u32;
 				let height = canvas.client_height() as u32;
 
-				log(format!("RESIZE: {} {}", width, height).as_ref());
 				if width != 0 && height != 0 {
 					canvas.set_width(width);
 					canvas.set_height(height);
@@ -232,7 +229,7 @@ impl GLSys for GLWeb {
 		}) as Box<dyn FnMut(_)>));
 
 		*g.borrow_mut() = closure;
-
 		request_animation_frame(g.borrow().as_ref().unwrap());
+		// closure.forget();
 	}
 }
