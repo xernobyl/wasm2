@@ -8,7 +8,7 @@ https://rustwasm.github.io/wasm-bindgen/api/web_sys/
 use crate::shaders::ShaderManager;
 use crate::gl_sys::GLSys;
 
-// use js_sys::WebAssembly;
+use js_sys::WebAssembly;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{/* WebGlProgram, */ WebGl2RenderingContext, /* WebGlShader */};
@@ -21,7 +21,7 @@ use web_sys::*;
 
 const FRAGMENT_SHADER_0: &str = r#"
 void main() {
-	gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+	gl_FragColor = vec4(1.0, 0.5, 0.25, 1.0);
 }
 "#;
 
@@ -60,11 +60,13 @@ impl GLWeb {
 
 		self.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
-		/*self.gl.draw_arrays(
+		self.shader_manager.bind_shader(&self.gl, 0);
+
+		self.gl.draw_arrays(
 			WebGl2RenderingContext::TRIANGLES,
 			0,
 			(9 / 3) as i32,
-		);*/
+		);
 
 		self.frame += 1;
 
@@ -130,13 +132,10 @@ impl GLSys for GLWeb {
 			closure.forget();
     }
 
-		let shader_manager = ShaderManager::new(/* &gl */);
+		let mut shader_manager = ShaderManager::new(/* &gl */);
+		shader_manager.create_shader(&gl, VERTEX_SHADER_0, FRAGMENT_SHADER_0)?;
 
-		/*
-		let vert_shader = compile_shader(&gl, WebGl2RenderingContext::VERTEX_SHADER, VERTEX_SHADER_0)?;
-		let frag_shader = compile_shader(&gl, WebGl2RenderingContext::FRAGMENT_SHADER, FRAGMENT_SHADER_0)?;
-		let program = link_program(&gl, [vert_shader, frag_shader].iter())?;
-		gl.use_program(Some(&program));
+		///////////////////////////////////
 
 		let vertices: [f32; 9] = [-0.7, -0.7, 0.0, 0.7, -0.7, 0.0, 0.0, 0.7, 0.0];
 		let memory_buffer = wasm_bindgen::memory()
@@ -155,7 +154,8 @@ impl GLSys for GLWeb {
 		);
 		gl.vertex_attrib_pointer_with_i32(0, 3, WebGl2RenderingContext::FLOAT, false, 0, 0);
 		gl.enable_vertex_attrib_array(0);
-		*/
+
+		///////////////////////////////////
 
 		Result::Ok(GLWeb {
 			canvas,
