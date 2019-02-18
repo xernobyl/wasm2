@@ -11,7 +11,7 @@ use crate::gl_sys::GLSys;
 use js_sys::WebAssembly;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{/* WebGlProgram, */ WebGl2RenderingContext, /* WebGlShader */};
+use web_sys::WebGl2RenderingContext;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -50,7 +50,7 @@ pub struct GLWeb {
 
 
 impl GLWeb {
-	fn frame_callback(&mut self, frame_time: f64) -> bool {
+	fn frame_callback(&mut self, frame_time: f64) {
 		const GOLDEN_RATIO: f64 = 1.618_033_988_749_895;
 		self.gl.clear_color(
 			0.0 + (frame_time * GOLDEN_RATIO).fract() as f32,
@@ -69,8 +69,6 @@ impl GLWeb {
 		);
 
 		self.frame += 1;
-
-		true
 	}
 }
 

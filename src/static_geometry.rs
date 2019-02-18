@@ -1,20 +1,45 @@
 const SIZE_IN_MB: usize = 16;
 
 
-struct StaticGeometry {
-	gl: &WebGl2RenderingContext,
+pub struct StaticGeometry {
 }
 
 
 pub impl StaticGeometry {
-	pub fn new(gl: &WebGl2RenderingContext) -> Self {
+	pub fn new(gl: &WebGl2RenderingContext, buffer_size: usize) -> Self {
+		let vbo = gl.create_buffer()
+		gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, this.vbo)
+		gl.bufferData(
+			WebGl2RenderingContext::ARRAY_BUFFER,
+			buffer_size,
+			WebGl2RenderingContext::STATIC_DRAW
+		);
+		let last_offset = 0
+
 		StaticGeometry {
-			gl: gl,
 		}
 	}
 
-	pub fn add_vertices(&self, data: X) {
+	pub fn add_vertices(&self, gl: &WebGl2RenderingContext, data: X) {
+		gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, self.vbo);
 
+		let alignment = data.byteLength / data.length;
+		// TODO: pad last_offset here
+		self.last_offset = Math.ceil(this.lastOffset / alignment) * alignment
+
+		gl.buffer_sub_data(
+			WebGl2RenderingContext::ARRAY_BUFFER,
+			self.last_offset,
+			data
+		);
+
+		let offset = self.last_offset;
+		self.last_offset += data.byteLength;
+
+		if (self.buffer_size < self.last_offset)
+			panic!("BUFFER NEEDS MORE MEMORY");
+
+		return offset
 	}
 
 	pub fn bindVertices(&self) {
@@ -26,11 +51,11 @@ pub impl StaticGeometry {
 	}
 }
 
-
+// TODO: this
+/*
 impl Drop for StaticGeometry {
-
 }
-
+*/
 
 
 
