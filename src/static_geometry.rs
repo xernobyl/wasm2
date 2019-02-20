@@ -1,53 +1,66 @@
+use web_sys::{WebGlBuffer, WebGl2RenderingContext};
+
 const SIZE_IN_MB: usize = 16;
 
 
 pub struct StaticGeometry {
+	vbo: WebGlBuffer,
+	ebo: WebGlBuffer,
+	last_offset: usize,
+	buffer_size: usize,
 }
 
 
-pub impl StaticGeometry {
-	pub fn new(gl: &WebGl2RenderingContext, buffer_size: usize) -> Self {
-		let vbo = gl.create_buffer()
-		gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, this.vbo)
-		gl.bufferData(
+impl StaticGeometry {
+	pub fn new(gl: &WebGl2RenderingContext, buffer_size: usize) -> Result<Self, String> {
+		let vbo = gl.create_buffer().ok_or("failed to create buffer")?;
+		let ebo = gl.create_buffer().ok_or("failed to create buffer")?;
+		gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&vbo));
+		gl.buffer_data_with_i32(
 			WebGl2RenderingContext::ARRAY_BUFFER,
-			buffer_size,
+			buffer_size as i32,
 			WebGl2RenderingContext::STATIC_DRAW
 		);
-		let last_offset = 0
+		let last_offset = 0;
 
-		StaticGeometry {
-		}
+		Ok(StaticGeometry {
+			vbo,
+			ebo,
+			last_offset,
+			buffer_size,
+		})
 	}
 
-	pub fn add_vertices(&self, gl: &WebGl2RenderingContext, data: X) {
-		gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, self.vbo);
+	pub fn add_vertices(&self, gl: &WebGl2RenderingContext, data: X) -> usize {
+		gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&self.vbo));
 
-		let alignment = data.byteLength / data.length;
-		// TODO: pad last_offset here
-		self.last_offset = Math.ceil(this.lastOffset / alignment) * alignment
+		// TODO: use correct size
+		let size = 64;
+		let padding = !(0xffffffff << size);
+		self.last_offset += !(self.last_offset & padding) & padding;
 
-		gl.buffer_sub_data(
+		gl.buffer_sub_data_with_i32(
 			WebGl2RenderingContext::ARRAY_BUFFER,
-			self.last_offset,
+			self.last_offset as i32,
 			data
 		);
 
 		let offset = self.last_offset;
 		self.last_offset += data.byteLength;
 
-		if (self.buffer_size < self.last_offset)
+		if self.buffer_size < self.last_offset {
 			panic!("BUFFER NEEDS MORE MEMORY");
+		}
 
-		return offset
+		offset
 	}
 
-	pub fn bindVertices(&self) {
-		self.gl.bindBuffer(gl.ARRAY_BUFFER, self.vbo)
+	pub fn bindVertices(&self, gl: &WebGl2RenderingContext) {
+		gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&self.vbo));
 	}
 
-	pub fn bindElements(&self) {
-		self.gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ebo)
+	pub fn bindElements(&self, gl: &WebGl2RenderingContext) {
+		gl.bind_buffer(WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER, Some(&self.ebo));
 	}
 }
 
