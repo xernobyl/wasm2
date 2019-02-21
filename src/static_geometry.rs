@@ -1,7 +1,5 @@
 use web_sys::{WebGlBuffer, WebGl2RenderingContext};
 
-const SIZE_IN_MB: usize = 16;
-
 
 pub struct StaticGeometry {
 	vbo: WebGlBuffer,
@@ -31,22 +29,25 @@ impl StaticGeometry {
 		})
 	}
 
-	pub fn add_vertices(&self, gl: &WebGl2RenderingContext, data: X) -> usize {
+	pub fn add_vertices(&mut self, gl: &WebGl2RenderingContext, data: &mut [u8]) -> usize {
 		gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&self.vbo));
 
-		// TODO: use correct size
-		let size = 64;
-		let padding = !(0xffffffff << size);
-		self.last_offset += !(self.last_offset & padding) & padding;
+		// TODO: use correct size, confirm this works
+		let size = 6;
+		let padding = !(0xffff_ffff << size);
 
-		gl.buffer_sub_data_with_i32(
+		if self.last_offset & padding != 0 {
+			self.last_offset += !(self.last_offset & padding) & padding;
+		};
+
+		gl.get_buffer_sub_data_with_i32_and_u8_array(
 			WebGl2RenderingContext::ARRAY_BUFFER,
 			self.last_offset as i32,
 			data
 		);
 
 		let offset = self.last_offset;
-		self.last_offset += data.byteLength;
+		self.last_offset += data.len();
 
 		if self.buffer_size < self.last_offset {
 			panic!("BUFFER NEEDS MORE MEMORY");
@@ -55,11 +56,11 @@ impl StaticGeometry {
 		offset
 	}
 
-	pub fn bindVertices(&self, gl: &WebGl2RenderingContext) {
+	pub fn bind_vertices(&self, gl: &WebGl2RenderingContext) {
 		gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&self.vbo));
 	}
 
-	pub fn bindElements(&self, gl: &WebGl2RenderingContext) {
+	pub fn bind_elements(&self, gl: &WebGl2RenderingContext) {
 		gl.bind_buffer(WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER, Some(&self.ebo));
 	}
 }

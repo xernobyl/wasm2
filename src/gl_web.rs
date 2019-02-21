@@ -5,6 +5,8 @@ https://rustwasm.github.io/wasm-bindgen/api/js_sys/
 https://rustwasm.github.io/wasm-bindgen/api/web_sys/
 */
 
+#![allow(dead_code)]
+
 use crate::shaders::ShaderManager;
 use crate::gl_sys::GLSys;
 use crate::static_geometry::StaticGeometry;
@@ -135,7 +137,7 @@ impl GLSys for GLWeb {
 		let mut shader_manager = ShaderManager::new(/* &gl */);
 		shader_manager.create_shader(&gl, VERTEX_SHADER_0, FRAGMENT_SHADER_0)?;
 
-		let static_geometry = StaticGeometry.new(&gl);
+		let static_geometry = StaticGeometry::new(&gl, 16 * 1024 * 1024)?;
 
 		///////////////////////////////////
 
