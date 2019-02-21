@@ -65,12 +65,12 @@ impl StaticGeometry {
 	}
 }
 
-// TODO: this
-/*
-impl Drop for StaticGeometry {
-}
-*/
 
+impl Drop for StaticGeometry {
+	fn drop(&mut self) {
+		// TODO: this
+	}
+}
 
 
 /*
