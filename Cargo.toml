@@ -24,9 +24,12 @@ features = [
 	'Node',
 	'Performance',
 	'UiEvent',
-	'WebGlBuffer',
 	'WebGl2RenderingContext',
+	'WebGlBuffer',
+	'WebGlFramebuffer',
 	'WebGlProgram',
 	'WebGlShader',
+	'WebGlTexture',
+	'WebGlVertexArrayObject',
 	'Window',
 ]

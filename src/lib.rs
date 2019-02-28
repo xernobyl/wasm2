@@ -4,6 +4,8 @@ pub mod gl_web;
 pub mod gl_sys;
 pub mod shaders;
 pub mod static_geometry;
+pub mod cube;
+pub mod framebuffer;
 
 use self::gl_web::GLWeb;
 use self::gl_sys::GLSys;

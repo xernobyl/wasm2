@@ -21,6 +21,8 @@ use std::rc::Rc;
 
 use web_sys::*;
 
+type GL = WebGl2RenderingContext;
+
 
 const FRAGMENT_SHADER_0: &str = r#"
 void main() {
@@ -46,7 +48,7 @@ extern "C" {
 
 pub struct GLWeb {
 	canvas: Rc<HtmlCanvasElement>,
-	gl: Rc<WebGl2RenderingContext>,
+	gl: Rc<GL>,
 	frame: u64,
 	shader_manager: ShaderManager,
 	static_geometry: StaticGeometry,
@@ -62,12 +64,12 @@ impl GLWeb {
 			0.5 + (frame_time * GOLDEN_RATIO).fract() as f32,
 			0.75 + (frame_time * GOLDEN_RATIO).fract() as f32);
 
-		self.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+		self.gl.clear(GL::COLOR_BUFFER_BIT);
 
 		self.shader_manager.bind_shader(&self.gl, 0);
 
 		self.gl.draw_arrays(
-			WebGl2RenderingContext::TRIANGLES,
+			GL::TRIANGLES,
 			0,
 			(9 / 3) as i32,
 		);
@@ -79,7 +81,7 @@ impl GLWeb {
 
 impl GLSys for GLWeb {
 	fn new() -> Result<Self, String> where Self: Sized {
-		fn create_canvas_element() -> Result<(HtmlCanvasElement, WebGl2RenderingContext), JsValue> {
+		fn create_canvas_element() -> Result<(HtmlCanvasElement, GL), JsValue> {
 			let document = window().ok_or("Can't get window")?
 				.document().ok_or("Can't get document")?;
 
@@ -103,7 +105,7 @@ impl GLSys for GLWeb {
 				canvas.set_height(height);
 			}
 
-			let gl = canvas.get_context("webgl2")?.unwrap().dyn_into::<WebGl2RenderingContext>()?;
+			let gl = canvas.get_context("webgl2")?.unwrap().dyn_into::<GL>()?;
 
 			Result::Ok((canvas, gl))
 		}
@@ -137,11 +139,11 @@ impl GLSys for GLWeb {
 		let mut shader_manager = ShaderManager::new(/* &gl */);
 		shader_manager.create_shader(&gl, VERTEX_SHADER_0, FRAGMENT_SHADER_0)?;
 
-		let static_geometry = StaticGeometry::new(&gl, 16 * 1024 * 1024)?;
+		let static_geometry = StaticGeometry::new(&gl, 16 * 1024 * 1024, 2 * 1024 * 1024)?;
 
 		///////////////////////////////////
 
-		let vertices: [f32; 9] = [-0.7, -0.7, 0.0, 0.7, -0.7, 0.0, 0.0, 0.7, 0.0];
+		/*let vertices: [f32; 9] = [-0.7, -0.7, 0.0, 0.7, -0.7, 0.0, 0.0, 0.7, 0.0];
 		let memory_buffer = wasm_bindgen::memory()
 		    .dyn_into::<WebAssembly::Memory>().map_err(js_to_str)?
 		    .buffer();
@@ -150,14 +152,14 @@ impl GLSys for GLWeb {
 		    .subarray(vertices_location, vertices_location + vertices.len() as u32);
 
 		let buffer = gl.create_buffer().ok_or("failed to create buffer")?;
-		gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
+		gl.bind_buffer(GL::ARRAY_BUFFER, Some(&buffer));
 		gl.buffer_data_with_array_buffer_view(
-			WebGl2RenderingContext::ARRAY_BUFFER,
+			GL::ARRAY_BUFFER,
 			&vert_array,
-			WebGl2RenderingContext::STATIC_DRAW,
+			GL::STATIC_DRAW,
 		);
-		gl.vertex_attrib_pointer_with_i32(0, 3, WebGl2RenderingContext::FLOAT, false, 0, 0);
-		gl.enable_vertex_attrib_array(0);
+		gl.vertex_attrib_pointer_with_i32(0, 3, GL::FLOAT, false, 0, 0);
+		gl.enable_vertex_attrib_array(0);*/
 
 		///////////////////////////////////
 
