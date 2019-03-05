@@ -12,7 +12,7 @@ pub struct ShaderManager {
 
 
 impl ShaderManager {
-	pub fn new(/* gl: &WebGl2RenderingContext */) -> ShaderManager {
+	pub fn new() -> ShaderManager {
 		ShaderManager {
 			shaders: Vec::new(),
 		}

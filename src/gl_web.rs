@@ -19,6 +19,8 @@ use web_sys::WebGl2RenderingContext;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::cube::Cube;
+
 use web_sys::*;
 
 type GL = WebGl2RenderingContext;
@@ -52,6 +54,7 @@ pub struct GLWeb {
 	frame: u64,
 	shader_manager: ShaderManager,
 	static_geometry: StaticGeometry,
+	cube: Cube,
 }
 
 
@@ -139,7 +142,9 @@ impl GLSys for GLWeb {
 		let mut shader_manager = ShaderManager::new(/* &gl */);
 		shader_manager.create_shader(&gl, VERTEX_SHADER_0, FRAGMENT_SHADER_0)?;
 
-		let static_geometry = StaticGeometry::new(&gl, 16 * 1024 * 1024, 2 * 1024 * 1024)?;
+		let mut static_geometry = StaticGeometry::new(&gl, 16 * 1024 * 1024, 2 * 1024 * 1024)?;
+
+		let cube = Cube::new(&gl, &mut static_geometry);
 
 		///////////////////////////////////
 
@@ -169,6 +174,7 @@ impl GLSys for GLWeb {
 			frame: 0,
 			shader_manager,
 			static_geometry,
+			cube,
 		})
 	}
 

@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 js-sys = "*"
 wasm-bindgen = "*"
 rand = "*"
+cgmath = "*"
 
 [dependencies.web-sys]
 version = "*"
