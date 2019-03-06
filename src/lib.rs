@@ -10,10 +10,22 @@ pub mod framebuffer;
 use self::gl_web::GLWeb;
 use self::gl_sys::GLSys;
 
+#[wasm_bindgen]
+extern "C" {
+	#[wasm_bindgen(js_namespace = console, js_name = log)]
+	fn log(s: &str);
+}
 
 #[wasm_bindgen(start)]
 pub fn web_main() -> Result<(), JsValue> {
-	let gl = GLWeb::new()?;
-	gl.start_loop();
-	Ok(())
+	match GLWeb::new() {
+		Err(msg) => {
+			log(&msg);
+			Err(JsValue::from(msg))
+		},
+		Ok(gl) => {
+			gl.start_loop();
+			Ok(())
+		}
+	}
 }

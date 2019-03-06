@@ -16,7 +16,7 @@ impl Framebuffer {
 		value.as_string().unwrap_or_else(|| "???".to_string())
 	}
 
-	fn new(gl: &GL, width: usize, height: usize) -> Result<Self, String> {
+	pub fn new(gl: &GL, width: u32, height: u32) -> Result<Self, String> {
 		let width = width as i32;
 		let height = height as i32;
 

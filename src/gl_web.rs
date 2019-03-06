@@ -7,11 +7,12 @@ https://rustwasm.github.io/wasm-bindgen/api/web_sys/
 
 #![allow(dead_code)]
 
+use crate::framebuffer::Framebuffer;
 use crate::shaders::ShaderManager;
 use crate::gl_sys::GLSys;
 use crate::static_geometry::StaticGeometry;
 
-use js_sys::WebAssembly;
+//use js_sys::WebAssembly;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::WebGl2RenderingContext;
@@ -54,6 +55,7 @@ pub struct GLWeb {
 	frame: u64,
 	shader_manager: ShaderManager,
 	static_geometry: StaticGeometry,
+	framebuffer: Framebuffer,
 	cube: Cube,
 }
 
@@ -139,6 +141,8 @@ impl GLSys for GLWeb {
 			closure.forget();
     }
 
+		let framebuffer = Framebuffer::new(&gl, canvas.width(), canvas.height())?;
+
 		let mut shader_manager = ShaderManager::new(/* &gl */);
 		shader_manager.create_shader(&gl, VERTEX_SHADER_0, FRAGMENT_SHADER_0)?;
 
@@ -175,6 +179,7 @@ impl GLSys for GLWeb {
 			shader_manager,
 			static_geometry,
 			cube,
+			framebuffer,
 		})
 	}
 
