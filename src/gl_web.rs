@@ -141,36 +141,13 @@ impl GLSys for GLWeb {
 			closure.forget();
     }
 
-		let framebuffer = Framebuffer::new(&gl, canvas.width(), canvas.height())?;
-
 		let mut shader_manager = ShaderManager::new(/* &gl */);
 		shader_manager.create_shader(&gl, VERTEX_SHADER_0, FRAGMENT_SHADER_0)?;
 
 		let mut static_geometry = StaticGeometry::new(&gl, 16 * 1024 * 1024, 2 * 1024 * 1024)?;
-
 		let cube = Cube::new(&gl, &mut static_geometry);
 
-		///////////////////////////////////
-
-		/*let vertices: [f32; 9] = [-0.7, -0.7, 0.0, 0.7, -0.7, 0.0, 0.0, 0.7, 0.0];
-		let memory_buffer = wasm_bindgen::memory()
-		    .dyn_into::<WebAssembly::Memory>().map_err(js_to_str)?
-		    .buffer();
-		let vertices_location = vertices.as_ptr() as u32 / 4;
-		let vert_array = js_sys::Float32Array::new(&memory_buffer)
-		    .subarray(vertices_location, vertices_location + vertices.len() as u32);
-
-		let buffer = gl.create_buffer().ok_or("failed to create buffer")?;
-		gl.bind_buffer(GL::ARRAY_BUFFER, Some(&buffer));
-		gl.buffer_data_with_array_buffer_view(
-			GL::ARRAY_BUFFER,
-			&vert_array,
-			GL::STATIC_DRAW,
-		);
-		gl.vertex_attrib_pointer_with_i32(0, 3, GL::FLOAT, false, 0, 0);
-		gl.enable_vertex_attrib_array(0);*/
-
-		///////////////////////////////////
+		let framebuffer = Framebuffer::new(&gl, canvas.width(), canvas.height())?;
 
 		Result::Ok(GLWeb {
 			canvas,

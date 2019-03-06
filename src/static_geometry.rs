@@ -1,5 +1,13 @@
 use web_sys::{WebGlBuffer, WebGl2RenderingContext};
+use wasm_bindgen::prelude::*;
+
 type GL = WebGl2RenderingContext;
+
+#[wasm_bindgen]
+extern "C" {
+	#[wasm_bindgen(js_namespace = console, js_name = log)]
+	fn log(s: &str);
+}
 
 
 pub struct StaticGeometry {
@@ -15,6 +23,7 @@ pub struct StaticGeometry {
 
 impl StaticGeometry {
 	pub fn new(gl: &GL, vertex_buffer_size: usize, element_buffer_size: usize) -> Result<Self, String> {
+		log("Initializing StaticGeometry:");
 		let vbo = gl.create_buffer().ok_or("failed to create buffer")?;
 		gl.bind_buffer(GL::ARRAY_BUFFER, Some(&vbo));
 		gl.buffer_data_with_i32(
@@ -30,6 +39,8 @@ impl StaticGeometry {
 			element_buffer_size as i32,
 			GL::STATIC_DRAW
 		);
+
+		log("All done.");
 
 		Ok(StaticGeometry {
 			vbo,

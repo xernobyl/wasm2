@@ -1,7 +1,14 @@
 use web_sys::{WebGlFramebuffer, WebGl2RenderingContext};
 use wasm_bindgen::JsValue;
+use wasm_bindgen::prelude::*;
 
 type GL = WebGl2RenderingContext;
+
+#[wasm_bindgen]
+extern "C" {
+	#[wasm_bindgen(js_namespace = console, js_name = log)]
+	fn log(s: &str);
+}
 
 
 pub struct Framebuffer {
@@ -10,13 +17,14 @@ pub struct Framebuffer {
 	framebuffer: WebGlFramebuffer,
 }
 
-
 impl Framebuffer {
 	fn js_to_str(value: JsValue) -> String {
 		value.as_string().unwrap_or_else(|| "???".to_string())
 	}
 
 	pub fn new(gl: &GL, width: u32, height: u32) -> Result<Self, String> {
+		log("Initializing Framebuffer:");
+
 		let width = width as i32;
 		let height = height as i32;
 
@@ -56,16 +64,18 @@ impl Framebuffer {
 		gl.clear(GL::DEPTH_BUFFER_BIT | GL::COLOR_BUFFER_BIT);
 
 		match gl.check_framebuffer_status(GL::FRAMEBUFFER) {
-			GL::FRAMEBUFFER_COMPLETE => Err("FRAMEBUFFER_COMPLETE"),
 			GL::FRAMEBUFFER_UNSUPPORTED => Err("FRAMEBUFFER_UNSUPPORTED"),
 			GL::FRAMEBUFFER_INCOMPLETE_ATTACHMENT => Err("FRAMEBUFFER_INCOMPLETE_ATTACHMENT"),
 			GL::FRAMEBUFFER_INCOMPLETE_DIMENSIONS => Err("FRAMEBUFFER_INCOMPLETE_DIMENSIONS"),
 			GL::FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT => Err("FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT"),
-			_ => Ok(())
+			GL::FRAMEBUFFER_INCOMPLETE_MULTISAMPLE => Err("FRAMEBUFFER_INCOMPLETE_MULTISAMPLE"),
+			_ => Ok(()),
 		}?;
 
 		gl.bind_texture(GL::TEXTURE_2D, None);
 		gl.bind_framebuffer(GL::FRAMEBUFFER, None);
+
+		log("All done.");
 
 		Ok(Self {
 			width,
