@@ -24,6 +24,8 @@ use crate::cube::Cube;
 
 use web_sys::*;
 
+use cgmath::*;
+
 type GL = WebGl2RenderingContext;
 
 
@@ -70,6 +72,19 @@ impl GLWeb {
 			0.75 + (frame_time * GOLDEN_RATIO).fract() as f32);
 
 		self.gl.clear(GL::COLOR_BUFFER_BIT);
+
+		let m_view = Matrix4::look_at(
+			Point3::new(10.0 * f64::sin(frame_time), 5.0, 10.0 * f64::cos(frame_time)),
+			Point3::new(0.0, 0.0, 0.0),
+			Vector3::new(0.0, 1.0, 0.0),
+		);
+
+		let m_projection = Matrix4::from(PerspectiveFov {
+			fovy: Rad::new(),
+			aspect: 1.0,
+			near: 0.1,
+			far: 100.0,
+		});
 
 		self.shader_manager.bind_shader(&self.gl, 0);
 

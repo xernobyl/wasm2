@@ -12,8 +12,8 @@ extern "C" {
 
 pub struct StaticGeometry {
 	vbo: WebGlBuffer,
-	vertex_last_offset: usize,
 	vertex_buffer_size: usize,
+	vertex_last_offset: usize,
 
 	ebo: WebGlBuffer,
 	element_buffer_size: usize,
@@ -33,7 +33,7 @@ impl StaticGeometry {
 		);
 
 		let ebo = gl.create_buffer().ok_or("failed to create buffer")?;
-		gl.bind_buffer(GL::ELEMENT_ARRAY_BUFFER, Some(&vbo));
+		gl.bind_buffer(GL::ELEMENT_ARRAY_BUFFER, Some(&ebo));
 		gl.buffer_data_with_i32(
 			GL::ELEMENT_ARRAY_BUFFER,
 			element_buffer_size as i32,
