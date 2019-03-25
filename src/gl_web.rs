@@ -80,7 +80,7 @@ impl GLWeb {
 		);
 
 		let m_projection = Matrix4::from(PerspectiveFov {
-			fovy: Rad::new(),
+			fovy: Rad::from(Deg(90.0)),
 			aspect: 1.0,
 			near: 0.1,
 			far: 100.0,
