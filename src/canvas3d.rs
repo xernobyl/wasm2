@@ -22,18 +22,18 @@ extern "C" {
 
 
 pub struct Canvas3D {
-	gl: Rc<GL>,
-	canvas: Rc<HtmlCanvasElement>,
-	callbacks: Canvas3DCallbacks,
+	gl: GL,
+	canvas: HtmlCanvasElement,
+	callbacks: &'static Canvas3DCallbacks,
 }
 
 
 impl Canvas3D {
 	pub fn run(callbacks: &'static mut Canvas3DCallbacks) -> Result<(), JsValue> {
 		let (canvas, gl) = Self::create_canvas_element().map_err(Self::js_to_str)?;
-		let canvas = Rc::new(canvas);
 
-		/*{
+		/*let canvas = Rc::new(canvas);
+		{
 			let canvas = canvas.clone();
 			let closure = Closure::wrap(Box::new(move || {
 				let width = canvas.client_width() as u32;
@@ -52,12 +52,20 @@ impl Canvas3D {
 			closure.forget();
     }*/
 
+		let mut canvas3d = Self {
+			canvas,
+			gl,
+			callbacks,
+		};
+
+		unsafe { current_canvas3d = Some(&mut canvas3d); }
+
 		log(format!("Starting loop...").as_ref());
 
 		unsafe {
 			window()
 			.unwrap()
-			.request_animation_frame(std::mem::transmute(request_animation_frame_callback));
+			.request_animation_frame(std::mem::transmute(request_animation_frame_callback as *mut fn(timestamp: f64)));
 		}
 
 		Ok(())
@@ -106,7 +114,7 @@ pub trait Canvas3DCallbacks {
 }
 
 
-static mut current_canvas3d: *mut Canvas3D = std::mem::transmute(0);
+static mut current_canvas3d: Option<&mut Canvas3D> = None;
 
 
 // https://developer.mozilla.org/en-US/docs/Games/Anatomy
@@ -114,9 +122,9 @@ unsafe fn request_animation_frame_callback(timestamp: f64) {
 	unsafe {
 		window()
 		.unwrap()
-		.request_animation_frame(std::mem::transmute(request_animation_frame_callback));
+		.request_animation_frame(std::mem::transmute(request_animation_frame_callback as *mut fn(timestamp: f64)));
 	}
-	(*current_canvas3d).callbacks.frame((*current_canvas3d).gl, timestamp);
+	current_canvas3d.unwrap().callbacks.frame(&mut current_canvas3d.unwrap().gl, timestamp);
 }
 
 
