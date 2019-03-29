@@ -11,6 +11,8 @@ use crate::framebuffer::Framebuffer;
 use crate::shaders::ShaderManager;
 use crate::gl_sys::GLSys;
 use crate::static_geometry::StaticGeometry;
+use crate::canvas3d::Canvas3D;
+use crate::demo::Demo;
 
 //use js_sys::WebAssembly;
 use wasm_bindgen::prelude::*;
