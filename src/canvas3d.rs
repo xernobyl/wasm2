@@ -22,19 +22,21 @@ extern "C" {
 
 
 pub struct Canvas3D {
-	gl: GL,
-	canvas: HtmlCanvasElement,
-	callbacks: &'static Canvas3DCallbacks,
+	//gl: GL,
+	//canvas: HtmlCanvasElement,
+}
+
+
+fn request_animation_frame(f: &Closure<FnMut(f64)>) {
+	window().unwrap().request_animation_frame(f.as_ref().unchecked_ref());
 }
 
 
 impl Canvas3D {
-	pub fn run(callbacks: &'static mut Canvas3DCallbacks) -> Result<(), JsValue> {
+	pub fn run(callbacks: Box<Canvas3DCallbacks>) -> Result<(), JsValue> {
 		let (canvas, gl) = Self::create_canvas_element().map_err(Self::js_to_str)?;
 
-		/*let canvas = Rc::new(canvas);
 		{
-			let canvas = canvas.clone();
 			let closure = Closure::wrap(Box::new(move || {
 				let width = canvas.client_width() as u32;
 				let height = canvas.client_height() as u32;
@@ -44,29 +46,32 @@ impl Canvas3D {
 					canvas.set_width(width);
 					canvas.set_height(height);
 
-					callbacks.resize(width, height);
+					//callbacks.resize(width, height);
 				}
 			}) as Box<dyn FnMut()>);
 
 			window().unwrap().set_onresize(Option::Some(closure.as_ref().unchecked_ref()));
 			closure.forget();
-    }*/
+    }
 
-		let mut canvas3d = Self {
-			canvas,
-			gl,
-			callbacks,
-		};
+		let callbacks = Box::leak(callbacks);
+		
+		{
+			// https://developer.mozilla.org/en-US/docs/Games/Anatomy
+			let f: Rc<_> = Rc::new(RefCell::new(None));
+			let g = f.clone();
 
-		unsafe { current_canvas3d = Some(&mut canvas3d); }
+			let closure = Some(Closure::wrap(Box::new(move |timestamp| {
+				request_animation_frame(f.borrow().as_ref().unwrap());
+
+				callbacks.frame(&gl, timestamp);
+			}) as Box<dyn FnMut(_)>));
+
+			*g.borrow_mut() = closure;
+			request_animation_frame(g.borrow().as_ref().unwrap());
+		}
 
 		log(format!("Starting loop...").as_ref());
-
-		unsafe {
-			window()
-			.unwrap()
-			.request_animation_frame(std::mem::transmute(request_animation_frame_callback as *mut fn(timestamp: f64)));
-		}
 
 		Ok(())
 	}
@@ -111,25 +116,4 @@ impl Canvas3D {
 pub trait Canvas3DCallbacks {
 	fn frame(&mut self, gl: &GL, timestamp: f64);
 	fn resize(&mut self, width: u32, height: u32);
-}
-
-
-static mut current_canvas3d: Option<&mut Canvas3D> = None;
-
-
-// https://developer.mozilla.org/en-US/docs/Games/Anatomy
-unsafe fn request_animation_frame_callback(timestamp: f64) {
-	unsafe {
-		window()
-		.unwrap()
-		.request_animation_frame(std::mem::transmute(request_animation_frame_callback as *mut fn(timestamp: f64)));
-	}
-	current_canvas3d.unwrap().callbacks.frame(&mut current_canvas3d.unwrap().gl, timestamp);
-}
-
-
-fn request_animation_frame(f: &Closure<FnMut(f64)>) {
-	window().unwrap()
-		.request_animation_frame(f.as_ref().unchecked_ref())
-		.expect("no requestAnimationFrame");
 }

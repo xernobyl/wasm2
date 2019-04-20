@@ -1,3 +1,6 @@
+#![feature(maybe_uninit)]
+#![feature(const_transmute)]
+
 use wasm_bindgen::prelude::*;
 
 //pub mod gl_web;
