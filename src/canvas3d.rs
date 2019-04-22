@@ -9,6 +9,7 @@ use web_sys::*;
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 
 type GL = WebGl2RenderingContext;
@@ -35,8 +36,10 @@ fn request_animation_frame(f: &Closure<FnMut(f64)>) {
 impl Canvas3D {
 	pub fn run(callbacks: Box<Canvas3DCallbacks>) -> Result<(), JsValue> {
 		let (canvas, gl) = Self::create_canvas_element().map_err(Self::js_to_str)?;
-
+		let callbacks = Box::leak(callbacks);
+		let callbacks = Arc::new(Mutex::new(callbacks));
 		{
+			let callbacks = Arc::clone(&callbacks);
 			let closure = Closure::wrap(Box::new(move || {
 				let width = canvas.client_width() as u32;
 				let height = canvas.client_height() as u32;
@@ -45,8 +48,8 @@ impl Canvas3D {
 					log(format!("Resizing: {} * {}", width, height).as_ref());
 					canvas.set_width(width);
 					canvas.set_height(height);
-
-					//callbacks.resize(width, height);
+					let mut callbacks = callbacks.lock().unwrap();
+					(*callbacks).resize(width, height);
 				}
 			}) as Box<dyn FnMut()>);
 
@@ -54,17 +57,16 @@ impl Canvas3D {
 			closure.forget();
     }
 
-		let callbacks = Box::leak(callbacks);
-		
 		{
 			// https://developer.mozilla.org/en-US/docs/Games/Anatomy
+			let callbacks = Arc::clone(&callbacks);
 			let f: Rc<_> = Rc::new(RefCell::new(None));
 			let g = f.clone();
 
 			let closure = Some(Closure::wrap(Box::new(move |timestamp| {
 				request_animation_frame(f.borrow().as_ref().unwrap());
-
-				callbacks.frame(&gl, timestamp);
+				let mut callbacks = callbacks.lock().unwrap();
+				(*callbacks).frame(&gl, timestamp);
 			}) as Box<dyn FnMut(_)>));
 
 			*g.borrow_mut() = closure;
