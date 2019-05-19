@@ -29,6 +29,7 @@ pub struct Canvas3D {
 
 
 fn request_animation_frame(f: &Closure<FnMut(f64)>) {
+	#[allow(unused_must_use)]
 	window().unwrap().request_animation_frame(f.as_ref().unchecked_ref());
 }
 
@@ -37,6 +38,9 @@ impl Canvas3D {
 	pub fn run(callbacks: Box<Canvas3DCallbacks>) -> Result<(), JsValue> {
 		let (canvas, gl) = Self::create_canvas_element().map_err(Self::js_to_str)?;
 		let callbacks = Box::leak(callbacks);
+		callbacks.resize(canvas.client_width() as u32, canvas.client_height() as u32);
+		callbacks.init(&gl)?;
+
 		let callbacks = Arc::new(Mutex::new(callbacks));
 		{
 			let callbacks = Arc::clone(&callbacks);
@@ -45,7 +49,6 @@ impl Canvas3D {
 				let height = canvas.client_height() as u32;
 
 				if width != 0 && height != 0 {
-					log(format!("Resizing: {} * {}", width, height).as_ref());
 					canvas.set_width(width);
 					canvas.set_height(height);
 					let mut callbacks = callbacks.lock().unwrap();
@@ -116,6 +119,7 @@ impl Canvas3D {
 
 
 pub trait Canvas3DCallbacks {
+	fn init(&mut self, gl: &GL) -> Result<(), String>;
 	fn frame(&mut self, gl: &GL, timestamp: f64);
 	fn resize(&mut self, width: u32, height: u32);
 }

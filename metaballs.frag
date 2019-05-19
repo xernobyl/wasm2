@@ -1,4 +1,4 @@
-precision mediump float;
+precision highp float;
 
 uniform vec2 u_resolution;
 uniform vec2 u_mouse;
@@ -41,13 +41,13 @@ vec2 uv;
 float metaballs(vec3 pos)
 {
     float METABALLS_TRESHOLD = 1.0;;
-    
+
     float value = 0.0;
 	for (int i = 1; i < 32; ++i) {
 		vec3 t = pos - points[i].xyz;
 		value += ((cos(u_time) * 0.5 + 0.5) * 0.01 + 0.02) / dot(t, t);
 	}
-    
+
 	return METABALLS_TRESHOLD - value;
 }
 
@@ -63,16 +63,16 @@ float opSmoothUnion( float d1, float d2, float k ) {
 float distance_field(vec3 pos) {
     float dm = metaballs(pos);
     float dp = planes_distance(pos);
-    
+
     return opSmoothUnion(dm, dp, 0.5);
 }
 
 vec3 Normal(vec3 pos)
 {
 	return normalize(pos);
-    
+
     vec2 d = vec2(0.008 * length(pos),0);
-	
+
 	return normalize(vec3(distance_field(pos + d.xyy) - distance_field(pos - d.xyy),
 		distance_field(pos + d.yxy) - distance_field(pos - d.yxy),
 		distance_field(pos + d.yyx) - distance_field(pos - d.yyx)));
@@ -96,9 +96,9 @@ vec3 slerp(vec3 a, vec3 b, float t)
 vec3 Shade(vec3 pos, vec3 ray, vec3 cpos)
 {
 	//return abs(fract(pos));
-    
+
     vec3 norm = Normal(pos);
-    
+
     float fog = clamp(1.0 - distance(pos, cpos) / 10.0, 0.0, 1.0);
     float light = clamp(dot(normalize(ray), -norm), 0.0, 1.0);
 
@@ -116,7 +116,7 @@ float Trace(vec3 pos, vec3 ray)
 	{
 		vec3 p = pos + t * ray;
         h = distance_field(p);
-        
+
         if (h <= 0.0 || t > 32.0)
             break;
         t += h;
@@ -152,11 +152,11 @@ void CamPolar( out vec3 pos, out vec3 ray, in vec3 origin, in vec2 rotation, in 
 
 	ray = normalize(ray);
 	localRay = ray;
-	
+
 	// rotate ray
 	ray.yz = ray.yz * c.xx + ray.zy * s.zx;
 	ray.xz = ray.xz * c.yy + ray.zx * s.yw;
-	
+
 	// position camera
 	pos = origin - distance*vec3(c.x*s.y,s.z,c.x*c.y);
 }
@@ -195,20 +195,20 @@ void main() {
 	points[29] = vec3(0.4751133708523767, 0.24970627212245172, -0.84375);
 	points[30] = vec3(-0.40877899284392705, 0.10775283063337437, -0.90625);
 	points[31] = vec3(0.13414895206255345, -0.20863244273247328, -0.96875);
-    
+
     for (int i = 0; i < 32; ++i) {
         points[i].y = fract(points[i].y * 2.0 - u_time * 0.25) * 2.5 - 1.25;
     }
-    
+
     uv = gl_FragCoord.xy / u_resolution.xy * vec2(4.0) - vec2(2.0);
-    
+
     vec2 camRot = vec2(0.0, 0.0);	//(iMouse.yx / u_resolution.yx * vec2(-2.0, 2.0) + 1.0) * vec2(3.1415926535897932384626433832795, 1.5707963267948966192313216916398);
 
 	vec3 pos, ray;
 	CamPolar(pos, ray, vec3(0), camRot, 4.0, 2.0);
-    
+
     float ts0 = Trace(pos, ray);
-    
+
     vec3 linear;
 
     if (ts0 > 0.0)

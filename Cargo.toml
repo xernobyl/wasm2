@@ -16,6 +16,7 @@ cgmath = "*"
 [dependencies.web-sys]
 version = "*"
 features = [
+	'console',
 	'CssStyleDeclaration',
 	'Document',
 	'Element',
