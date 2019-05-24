@@ -3,6 +3,7 @@ name = "wasm2"
 version = "0.0.0"
 authors = ["Tiago <xernobyl@hotmail.com>"]
 edition = "2018"
+build = "build.rs"
 
 [lib]
 crate-type = ["cdylib"]

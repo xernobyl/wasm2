@@ -4,12 +4,25 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "Build",
-			"command": "cargo",
-			"args": ["build", "--target", "wasm32-unknown-unknown"],
-			"options": {
-					"cwd": "${workspaceRoot}"
-			}
-	},
+			"label": "Build (debug)",
+			"type": "shell",
+			"command": "cargo build --target wasm32-unknown-unknown",
+			"group": "build",
+			"problemMatcher": [
+				"$rustc"
+			]
+		},
+		{
+			"label": "wasm-bindgen",
+			"type": "shell",
+			"command": "wasm-bindgen .\\target\\wasm32-unknown-unknown\\debug\\wasm2.wasm --out-dir .",
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "Run server",
+			"type": "npm",
+			"script": "serve"
+		}
 	]
 }

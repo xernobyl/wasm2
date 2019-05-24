@@ -64,7 +64,7 @@ impl StaticGeometry {
 			self.vertex_last_offset += !(self.vertex_last_offset & padding) & padding;
 		};
 
-		gl.get_buffer_sub_data_with_i32_and_u8_array(
+		gl.buffer_sub_data_with_i32_and_u8_array(
 			GL::ARRAY_BUFFER,
 			self.vertex_last_offset as i32,
 			data
@@ -91,7 +91,7 @@ impl StaticGeometry {
 			self.element_last_offset += !(self.element_last_offset & padding) & padding;
 		};
 
-		gl.get_buffer_sub_data_with_i32_and_u8_array(
+		gl.buffer_sub_data_with_i32_and_u8_array(
 			GL::ELEMENT_ARRAY_BUFFER,
 			self.element_last_offset as i32,
 			data
