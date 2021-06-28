@@ -1,84 +1,104 @@
-use web_sys::{WebGlProgram, WebGl2RenderingContext, WebGlShader};
+/*
+Shaders
+*/
 
 
-struct Shader {
-	program: WebGlProgram,
+enum Programs {
+  Screen,
+  Cube,
+  DepthMaxMin0,
+  DepthMaxMin1,
+  NPrograms,
 }
 
 
-pub struct ShaderManager {
-	shaders: Vec<Shader>,
+fn setup_shaders(&mut self) -> Result<(), JsValue>{
+  let gl = &self.context;
+
+  let vert_shader = Self::compile_shader(gl,
+    Gl::VERTEX_SHADER, include_str!("glsl/screen.vert"))?;
+  let frag_shader = Self::compile_shader(gl,
+    Gl::FRAGMENT_SHADER, include_str!("glsl/screen.frag"))?;
+  self.programs[Programs::Screen as usize] = Some(Self::link_program(gl, &vert_shader, &frag_shader)?);
+  gl.delete_shader(Some(&frag_shader));
+  gl.delete_shader(Some(&vert_shader));
+
+  let vert_shader = Self::compile_shader(gl,
+    Gl::VERTEX_SHADER, include_str!("glsl/cube_basic.vert"))?;
+  let frag_shader = Self::compile_shader(gl,
+    Gl::FRAGMENT_SHADER, include_str!("glsl/cube_basic.frag"))?;
+  self.programs[Programs::Cube as usize] = Some(Self::link_program(gl, &vert_shader, &frag_shader)?);
+  gl.delete_shader(Some(&frag_shader));
+  gl.delete_shader(Some(&vert_shader));
+
+  let vert_shader = Self::compile_shader(gl,
+    Gl::VERTEX_SHADER, include_str!("glsl/max_min.vert"))?;
+  let frag_shader = Self::compile_shader(gl,
+    Gl::FRAGMENT_SHADER, include_str!("glsl/depth_max_min.frag"))?;
+  self.programs[Programs::DepthMaxMin0 as usize] = Some(Self::link_program(gl, &vert_shader, &frag_shader)?);
+  gl.delete_shader(Some(&frag_shader));
+  gl.delete_shader(Some(&vert_shader));
+
+  let vert_shader = Self::compile_shader(gl,
+    Gl::VERTEX_SHADER, include_str!("glsl/max_min.vert"))?;
+  let frag_shader = Self::compile_shader(gl,
+    Gl::FRAGMENT_SHADER, include_str!("glsl/max_min_max_min.frag"))?;
+  self.programs[Programs::DepthMaxMin1 as usize] = Some(Self::link_program(gl, &vert_shader, &frag_shader)?);
+  gl.delete_shader(Some(&frag_shader));
+  gl.delete_shader(Some(&vert_shader));
+
+  Ok(())
 }
 
 
-impl ShaderManager {
-	pub fn new() -> ShaderManager {
-		ShaderManager {
-			shaders: Vec::new(),
-		}
-	}
+fn compile_shader(
+  context: &Gl,
+  shader_type: u32,
+  source: &str,
+) -> Result<WebGlShader, String> {
+  let shader = context
+    .create_shader(shader_type)
+    .ok_or_else(|| String::from("Unable to create shader object"))?;
+  context.shader_source(&shader, source);
+  context.compile_shader(&shader);
+
+  if context
+    .get_shader_parameter(&shader, Gl::COMPILE_STATUS)
+    .as_bool()
+    .unwrap_or(false)
+  {
+    Ok(shader)
+  } else {
+    Err(context
+      .get_shader_info_log(&shader)
+      .unwrap_or_else(|| String::from("Unknown error getting shader info log")))
+  }
+}
 
 
-	fn build_shader(
-		gl: &WebGl2RenderingContext,
-		shader_type: u32,
-		source: &str,
-	) -> Result<WebGlShader, String> {
-		let shader = gl
-		.create_shader(shader_type)
-		.ok_or_else(|| String::from("Unable to create shader object"))?;
-		gl.shader_source(&shader, source);
-		gl.compile_shader(&shader);
+fn link_program(
+  context: &Gl,
+  vert_shader: &WebGlShader,
+  frag_shader: &WebGlShader,
+) -> Result<WebGlProgram, String> {
+  let program = context
+    .create_program()
+    .ok_or_else(|| String::from("Unable to create shader object"))?;
 
-		if gl
-		.get_shader_parameter(&shader, WebGl2RenderingContext::COMPILE_STATUS)
-		.as_bool().unwrap_or(false)
-		{
-			Ok(shader)
-		} else {
-			Err(gl
-			.get_shader_info_log(&shader)
-			.unwrap_or_else(|| "Unknown error creating shader".into()))
-		}
-	}
+  context.attach_shader(&program, vert_shader);
+  context.attach_shader(&program, frag_shader);
+  context.link_program(&program);
 
-
-	pub fn create_shader(
-		&mut self,
-		gl: &WebGl2RenderingContext,
-		vertex_source: &str,
-		fragment_source: &str
-	) -> Result<usize, String> {
-		let vertex_shader = Self::build_shader(gl, WebGl2RenderingContext::VERTEX_SHADER, vertex_source)?;
-		let fragment_shader = Self::build_shader(gl, WebGl2RenderingContext::FRAGMENT_SHADER, fragment_source)?;
-
-		let program = gl
-		.create_program()
-		.ok_or_else(|| String::from("Unable to create shader object"))?;
-
-		gl.attach_shader(&program, &vertex_shader);
-		gl.attach_shader(&program, &fragment_shader);
-		gl.link_program(&program);
-
-		if gl
-			.get_program_parameter(&program, WebGl2RenderingContext::LINK_STATUS)
-			.as_bool()
-			.unwrap_or(false)
-		{
-			self.shaders.push(Shader {
-				program,
-			});
-
-			Ok(self.shaders.len())
-		} else {
-			Err(gl
-				.get_program_info_log(&program)
-				.unwrap_or_else(|| "Unknown error creating program object".into()))
-		}
-	}
-
-
-	pub fn bind_shader(&self, gl: &WebGl2RenderingContext, id: usize) {
-		gl.use_program(Some(&self.shaders[id].program));
-	}
+  if !context
+    .get_program_parameter(&program, Gl::LINK_STATUS)
+    .as_bool()
+    .unwrap_or(false)
+  {
+    Err(context
+      .get_program_info_log(&program)
+      .unwrap_or_else(|| String::from("Unknown error creating program object")))
+  }
+  else {
+    Ok(program)
+  }
 }

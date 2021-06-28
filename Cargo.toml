@@ -1,18 +1,23 @@
 [package]
 name = "wasm2"
 version = "0.0.0"
-authors = ["Tiago <xernobyl@hotmail.com>"]
+authors = ["Tiago <1585571+xernobyl@users.noreply.github.com>"]
 edition = "2018"
-build = "build.rs"
+description = "A program"
+repository = "TBD"
+
+[build]
+target = "wasm32-unknown-unknown"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
+console_error_panic_hook = "*"
 js-sys = "*"
-wasm-bindgen = "*"
-rand = "*"
-cgmath = "*"
+glam = "*"
+serde = { version = "*", features = ["derive"] }
+wasm-bindgen = { version = "*", features = ["serde-serialize"] }
 
 [dependencies.web-sys]
 version = "*"
@@ -27,12 +32,13 @@ features = [
 	'Node',
 	'Performance',
 	'UiEvent',
-	'WebGl2RenderingContext',
+  'WebGl2RenderingContext',
 	'WebGlBuffer',
 	'WebGlFramebuffer',
 	'WebGlProgram',
 	'WebGlShader',
 	'WebGlTexture',
-	'WebGlVertexArrayObject',
+	'WebGlUniformLocation',
+  'WebGlVertexArrayObject',
 	'Window',
 ]

@@ -1,28 +1,33 @@
 {
-	// See https://go.microsoft.com/fwlink/?LinkId=733558
-	// for the documentation about the tasks.json format
 	"version": "2.0.0",
 	"tasks": [
-		{
-			"label": "Build (debug)",
-			"type": "shell",
-			"command": "cargo build --target wasm32-unknown-unknown",
-			"group": "build",
-			"problemMatcher": [
-				"$rustc"
-			]
-		},
-		{
-			"label": "wasm-bindgen",
-			"type": "shell",
-			"command": "wasm-bindgen .\\target\\wasm32-unknown-unknown\\debug\\wasm2.wasm --out-dir .",
-			"group": "build",
-			"problemMatcher": []
-		},
-		{
-			"label": "Run server",
-			"type": "npm",
-			"script": "serve"
-		}
-	]
+    {
+      "label": "Build Dev (wasm-pack)",
+      "type": "shell",
+      "windows": {
+        "command": "wasm-pack build --target web --dev --no-typescript"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Release (wasm-pack)",
+      "type": "shell",
+      "windows": {
+        "command": "wasm-pack build --target web --release --no-typescript"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+  ]
 }

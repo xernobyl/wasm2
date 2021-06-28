@@ -1,0 +1,6 @@
+{
+    "editor.fontLigatures": true,
+    "editor.atomicSoftTabs": true,
+    "editor.tabSize": 2,
+    "editor.detectIndentation": false
+}
