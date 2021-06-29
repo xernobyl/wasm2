@@ -41,7 +41,7 @@ struct App {
   max_width: u32,
   max_height: u32,
   aspect_ratio: f32,
-  // fullscreen_buffers: ScreenBuffers,
+  fullscreen_buffers: ScreenBuffers,
 }
 
 
@@ -122,7 +122,7 @@ impl App {
     // context.get_extension("WEBGL_compressed_texture_s3tc");
     // context.get_extension("WEBGL_compressed_texture_s3tc_srgb");
 
-    // let fullscreen_buffers = fullscreen_buffers::ScreenBuffers::init(&context, &(width as i32), &(height as i32)).unwrap();
+    let fullscreen_buffers = fullscreen_buffers::ScreenBuffers::init(&context, &(width as i32), &(height as i32)).unwrap();
     let screen = web_sys::window().unwrap().screen().unwrap();
 
     let mut app = App {
@@ -139,7 +139,7 @@ impl App {
       new_height: height,
       max_width: screen.width().ok().unwrap() as u32,
       max_height: screen.height().ok().unwrap() as u32,
-      // fullscreen_buffers,
+      fullscreen_buffers,
     };
 
     log!("Setup...");
@@ -156,7 +156,8 @@ impl App {
         canvas.set_width(width);
         canvas.set_height(height);
         let mut app = app.borrow_mut();
-        app.resize(width, height);
+        app.new_width = width;
+        app.new_height = height;
       }
     }) as Box<dyn FnMut()>);
 
@@ -186,9 +187,7 @@ impl App {
 
         app.width = app.new_width;
         app.height = app.new_height;
-
         app.aspect_ratio = app.width as f32 / app.height as f32;
-
         app.new_width = 0;
 
         log!("Resize: {} {}, {}", app.width, app.height, app.aspect_ratio);
@@ -230,8 +229,7 @@ impl App {
 
     // log!0"Frame: {}\nTimestamp: {}", self.current_frame, self.current_timestamp);
 
-    // self.fullscreen_buffers.bind(&gl);
-    gl.bind_framebuffer(Gl::FRAMEBUFFER, None);
+    self.fullscreen_buffers.bind(&gl);
     gl.clear_color(rng.urand(), rng.urand(), rng.urand(), rng.urand());
     gl.clear(Gl::DEPTH_BUFFER_BIT | Gl::COLOR_BUFFER_BIT);
 
@@ -294,15 +292,15 @@ impl App {
     mut_lines.draw(500 - 3);
 
     // screen pass
-    /*gl.bind_framebuffer(Gl::FRAMEBUFFER, None);
+    gl.bind_framebuffer(Gl::FRAMEBUFFER, None);
     gl.viewport(0, 0, self.width as i32, self.height as i32);
 
     gl.use_program(self.programs[Programs::Screen as usize].as_ref());
     let location = gl.get_uniform_location(self.programs[Programs::Cube as usize].as_ref().unwrap(), "color_texture");
     gl.active_texture(Gl::TEXTURE0);
-    // gl.bind_texture(Gl::TEXTURE_2D, Some(&self.fullscreen_buffers.color_texture));
+    gl.bind_texture(Gl::TEXTURE_2D, Some(&self.fullscreen_buffers.color_texture));
     gl.uniform1i(location.as_ref(), 0);
-    utils::fullscreen_quad(&gl);*/
+    utils::fullscreen_quad(&gl);
   }
 
 
@@ -410,12 +408,6 @@ impl App {
     else {
       Ok(program)
     }
-  }
-
-
-  fn resize(&mut self, width: u32, height: u32) {
-    self.new_width = width;
-    self.new_height = height;
   }
 }
 
