@@ -36,6 +36,10 @@ struct App {
   // cube: half_cube::HalfCube<'a>,
   width: u32,
   height: u32,
+  new_width: u32, // set this whenever there are resizes
+  new_height: u32,
+  max_width: u32,
+  max_height: u32,
   aspect_ratio: f32,
   // fullscreen_buffers: ScreenBuffers,
 }
@@ -118,7 +122,8 @@ impl App {
     // context.get_extension("WEBGL_compressed_texture_s3tc");
     // context.get_extension("WEBGL_compressed_texture_s3tc_srgb");
 
-    let fullscreen_buffers = fullscreen_buffers::ScreenBuffers::init(&context, &(width as i32), &(height as i32)).unwrap();
+    // let fullscreen_buffers = fullscreen_buffers::ScreenBuffers::init(&context, &(width as i32), &(height as i32)).unwrap();
+    let screen = web_sys::window().unwrap().screen().unwrap();
 
     let mut app = App {
       context,
@@ -128,8 +133,12 @@ impl App {
       current_timestamp: 0.0,
       delta_time: 0.0,
       aspect_ratio,
-      width,
-      height,
+      width: 0,
+      height: 0,
+      new_width: width,
+      new_height: height,
+      max_width: screen.width().ok().unwrap() as u32,
+      max_height: screen.height().ok().unwrap() as u32,
       // fullscreen_buffers,
     };
 
@@ -157,16 +166,45 @@ impl App {
     let f = Rc::new(RefCell::new(None));
     let g = f.clone();
 
-    *g.borrow_mut() = Some(Closure::wrap(Box::new(move |timestamp| {
+    let closure = Closure::wrap(Box::new(move |timestamp| {
       web_sys::window().unwrap().request_animation_frame(
         (f.borrow().as_ref().unwrap() as &Closure<dyn FnMut(f64)>)
         .as_ref().unchecked_ref());
+
       let mut app = app_rc.borrow_mut();
       app.delta_time = timestamp - app.current_timestamp;
       app.current_timestamp = timestamp;
-      app.on_frame();
+
+      let resized = if app.new_width > 0 {
+        if app.max_height < app.new_height {
+          app.max_height = app.new_height;
+        }
+
+        if app.max_width < app.new_width {
+          app.max_width = app.new_width;
+        }
+
+        app.width = app.new_width;
+        app.height = app.new_height;
+
+        app.aspect_ratio = app.width as f32 / app.height as f32;
+
+        app.new_width = 0;
+
+        log!("Resize: {} {}, {}", app.width, app.height, app.aspect_ratio);
+        log!("Max size: {} {}", app.max_width, app.max_height);
+
+        true
+      }
+      else {
+        false
+      };
+
+      app.on_frame(resized);
       app.current_frame += 1;
-    }) as Box<dyn FnMut(f64)>));
+    }) as Box<dyn FnMut(f64)>);
+
+    *g.borrow_mut() = Some(closure);
 
     log!("Starting render loop...");
     web_sys::window().unwrap().request_animation_frame(
@@ -177,17 +215,16 @@ impl App {
   fn setup(&mut self) -> Result<(), String> {
     log!("setup_shaders()");
     self.setup_shaders().expect("Shader error");
-    // self.triangle = Some(Box::new(triangle::FullScreenPass::init(&self.context)
-    //  .expect("Error creating triangle.")));
 
     Ok(())
   }
 
 
-  fn on_frame(&self) {
+  fn on_frame(&self, resized: bool) {
     /*
     Using infinite inverted depth buffer because of the better precision
     */
+
     let gl = &self.context;
     let mut rng = fast_rand::FastRand::new(3464357);
 
@@ -377,12 +414,8 @@ impl App {
 
 
   fn resize(&mut self, width: u32, height: u32) {
-    self.aspect_ratio = width as f32 / height as f32;
-
-    self.width = width;
-    self.height = height;
-
-    log!("Resize! {} {}, {}", self.width, self.height, self.aspect_ratio);
+    self.new_width = width;
+    self.new_height = height;
   }
 }
 
