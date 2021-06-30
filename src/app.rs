@@ -1,5 +1,6 @@
 use crate::fullscreen_buffers::{self, ScreenBuffers};
 use crate::scene::Scene;
+use crate::scene1::Scene1;
 use serde::Serialize;
 use std::{panic};
 use std::{rc::Rc, cell::RefCell};
@@ -141,6 +142,9 @@ impl App {
 
     log!("Setup...");
     app.setup();
+
+    app.scenes.push(Box::new(Scene1::new()));
+    app.current_scene = 0;
 
     let app_rc = Rc::new(RefCell::new(app));
 
