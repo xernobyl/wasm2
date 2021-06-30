@@ -10,7 +10,8 @@ mod half_cube;
 mod fullscreen_buffers;
 mod fast_rand;
 mod line_2d_strip;
-pub mod scene;
+mod scene;
+mod scene1;
 
 
 #[wasm_bindgen(start)]

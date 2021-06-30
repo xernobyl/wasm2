@@ -1,7 +1,5 @@
 use crate::fullscreen_buffers::{self, ScreenBuffers};
 use crate::scene::Scene;
-use crate::{fast_rand, line_2d_strip, utils};
-use glam::{Mat4, Vec3};
 use serde::Serialize;
 use std::{panic};
 use std::{rc::Rc, cell::RefCell};
@@ -12,7 +10,7 @@ use web_sys::{WebGlProgram, WebGl2RenderingContext, WebGlShader};
 type Gl = WebGl2RenderingContext;
 
 
-enum Programs {
+pub enum Programs {
   Screen,
   Cube,
   Line2DStrip,
@@ -23,21 +21,22 @@ enum Programs {
 
 
 pub struct App {
-  context: Gl,
-  programs: [Option<web_sys::WebGlProgram>; Programs::NPrograms as usize],
+  pub context: Gl,
+  pub programs: [Option<web_sys::WebGlProgram>; Programs::NPrograms as usize],
   current_frame: u32,
   delta_time: f64,
-  current_timestamp: f64,
+  pub current_timestamp: f64,
   // cube: half_cube::HalfCube<'a>,
-  width: u32,
-  height: u32,
+  pub width: u32,
+  pub height: u32,
   new_width: u32, // set this whenever there are resizes
   new_height: u32,
   max_width: u32,
   max_height: u32,
-  aspect_ratio: f32,
-  fullscreen_buffers: ScreenBuffers,
-  scene: Option<Box<dyn Scene>>,
+  pub aspect_ratio: f32,
+  pub fullscreen_buffers: ScreenBuffers,
+  scenes: Vec<Box<dyn Scene>>,
+  current_scene: usize,
 }
 
 
@@ -136,7 +135,8 @@ impl App {
       max_width: screen.width().ok().unwrap() as u32,
       max_height: screen.height().ok().unwrap() as u32,
       fullscreen_buffers,
-      scene: None,
+      scenes: Vec::new(),
+      current_scene: usize::MAX,
     };
 
     log!("Setup...");
@@ -196,7 +196,20 @@ impl App {
         false
       };
 
-      app.on_frame(resized);
+      if app.current_scene != usize::MAX {
+        let scene = app.scenes[app.current_scene].as_ref();
+        scene.on_frame(&app);
+      }
+      else {
+        // app.on_frame(resized);
+
+        // _NO SIGNAL_
+        let gl = &app.context;
+        gl.bind_framebuffer(Gl::FRAMEBUFFER, None);
+        gl.clear_color(0.0, 0.0, 1.0, 1.0);
+        gl.clear(Gl::COLOR_BUFFER_BIT);
+      }
+
       app.current_frame += 1;
     }) as Box<dyn FnMut(f64)>);
 
@@ -213,91 +226,6 @@ impl App {
     self.setup_shaders().expect("Shader error");
 
     Ok(())
-  }
-
-
-  fn on_frame(&self, resized: bool) {
-    /*
-    Using infinite inverted depth buffer because of the better precision
-    */
-
-    let gl = &self.context;
-    let mut rng = fast_rand::FastRand::new(3464357);
-
-    // log!0"Frame: {}\nTimestamp: {}", self.current_frame, self.current_timestamp);
-
-    self.fullscreen_buffers.bind(&gl);
-    gl.clear_color(rng.urand(), rng.urand(), rng.urand(), rng.urand());
-    gl.clear(Gl::DEPTH_BUFFER_BIT | Gl::COLOR_BUFFER_BIT);
-
-    let camera_position = Vec3::new(15.0 * f32::cos(self.current_timestamp as f32 / 2000.0), 10.0 * f32::sin(self.current_timestamp as f32 / 2000.0), 15.0 * f32::sin(self.current_timestamp as f32 / 2000.0));
-    let projection = Mat4::perspective_infinite_reverse_rh(std::f32::consts::PI / 2.0, self.aspect_ratio, 0.1);
-    let view = Mat4::look_at_rh(camera_position, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
-
-    let view_projection = projection * view;
-
-    let mut view_projection_array = Vec::new();
-    // let mut position_array = Vec::new();
-
-    for _ in 0..128 {
-      let scale_factor = rng.urand() * 0.75 + 0.25;
-
-      let cube_pos = Vec3::new(5.0 * rng.rand(), 5.0 * rng.rand(), 5.0 * rng.rand());
-      let mv = Mat4::from_translation(cube_pos);
-
-      // camera aligned cubes... save this for later, probably do it in shader
-      let mut dir = camera_position - cube_pos;
-      dir.x = if dir.x >= 0.0 { 1.0 } else { -1.0 };
-      dir.y = if dir.y >= 0.0 { 1.0 } else { -1.0 };
-      dir.z = if dir.z >= 0.0 { 1.0 } else { -1.0 };
-      let scale = Mat4::from_scale(dir);
-
-      view_projection_array.push(view_projection * mv * scale);
-      // position_array.push(pos);
-    };
-
-    // self.cube.update_mvp(utils::as_f32_slice(view_projection_array.as_slice(), 4 * 4));
-    // self.cube.update_positions(&gl, utils::as_f32_slice(position_array.as_slice(), 3));
-
-    gl.use_program(self.programs[Programs::Cube as usize].as_ref());
-    //let location = gl.get_uniform_location(self.programs[Programs::Cube as usize].as_ref().unwrap(), "camera");
-
-    //gl.uniform_matrix4fv_with_f32_array(location.as_ref(), false, &m.to_cols_array());
-    //let location = gl.get_uniform_location(self.programs[Programs::Cube as usize].as_ref().unwrap(), "camera_position");
-    //gl.uniform3f(location.as_ref(), camera_position.x, camera_position.y, camera_position.z);
-
-    gl.depth_func(Gl::GREATER);
-    gl.clear_depth(0.0);
-    gl.enable(Gl::DEPTH_TEST);
-    // self.cube.draw_instanced(view_projection_array.len() as i32);
-    gl.disable(Gl::DEPTH_TEST);
-
-    let mut lines = Vec::new();
-
-    for i in 0..500 {
-      lines.push(f32::sin(i as f32 / 500.0 * std::f32::consts::TAU + self.current_timestamp as f32 / 2000.0));
-      lines.push(f32::cos(i as f32 / 500.0 * std::f32::consts::TAU + self.current_timestamp as f32 / 2000.0));
-      lines.push(rng.urand() * 0.05);
-
-      // lines.push(0.05);
-    };
-
-    let mut_lines = line_2d_strip::Line2DStrip::new(&gl);
-    mut_lines.update_points(lines.as_slice());
-
-    gl.use_program(self.programs[Programs::Line2DStrip as usize].as_ref());
-    mut_lines.draw(500 - 3);
-
-    // screen pass
-    gl.bind_framebuffer(Gl::FRAMEBUFFER, None);
-    gl.viewport(0, 0, self.width as i32, self.height as i32);
-
-    gl.use_program(self.programs[Programs::Screen as usize].as_ref());
-    let location = gl.get_uniform_location(self.programs[Programs::Cube as usize].as_ref().unwrap(), "color_texture");
-    gl.active_texture(Gl::TEXTURE0);
-    gl.bind_texture(Gl::TEXTURE_2D, Some(&self.fullscreen_buffers.color_texture));
-    gl.uniform1i(location.as_ref(), 0);
-    utils::fullscreen_quad(&gl);
   }
 
 

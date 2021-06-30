@@ -35,19 +35,19 @@ impl <'a> Line2DStrip<'a> {
 
     let stride = 4 * 3 * 1;
 
-    gl.vertex_attrib_pointer_with_i32(0, 3, Gl::FLOAT, false, stride, 4 * 3 * 0);
+    gl.vertex_attrib_pointer_with_i32(0, 3, Gl::FLOAT, false, stride, 0);
     gl.enable_vertex_attrib_array(0);
     gl.vertex_attrib_divisor(0, 1);
 
-    gl.vertex_attrib_pointer_with_i32(1, 3, Gl::FLOAT, false, stride, 4 * 3 * 1);
+    gl.vertex_attrib_pointer_with_i32(1, 3, Gl::FLOAT, false, stride, 12);
     gl.enable_vertex_attrib_array(1);
     gl.vertex_attrib_divisor(1, 1);
 
-    gl.vertex_attrib_pointer_with_i32(2, 3, Gl::FLOAT, false, stride, 4 * 3 * 2);
+    gl.vertex_attrib_pointer_with_i32(2, 3, Gl::FLOAT, false, stride, 24);
     gl.enable_vertex_attrib_array(2);
     gl.vertex_attrib_divisor(2, 1);
 
-    gl.vertex_attrib_pointer_with_i32(3, 3, Gl::FLOAT, false, stride, 4 * 3 * 3);
+    gl.vertex_attrib_pointer_with_i32(3, 3, Gl::FLOAT, false, stride, 36);
     gl.enable_vertex_attrib_array(3);
     gl.vertex_attrib_divisor(3, 1);
 
