@@ -24,18 +24,17 @@ pub enum Programs {
 pub struct App {
   pub context: Gl,
   pub programs: [Option<web_sys::WebGlProgram>; Programs::NPrograms as usize],
-  current_frame: u32,
-  delta_time: f64,
+  pub current_frame: u32,
+  pub delta_time: f64,
   pub current_timestamp: f64,
-  // cube: half_cube::HalfCube<'a>,
   pub width: u32,
   pub height: u32,
-  new_width: u32, // set this whenever there are resizes
-  new_height: u32,
-  max_width: u32,
-  max_height: u32,
+  pub max_width: u32,
+  pub max_height: u32,
   pub aspect_ratio: f32,
   pub fullscreen_buffers: ScreenBuffers,
+  new_width: u32, // set this whenever there are resizes
+  new_height: u32,
   scenes: Vec<Box<dyn Scene>>,
   current_scene: usize,
 }
@@ -107,9 +106,12 @@ impl App {
     // context.get_extension("EXT_texture_filter_anisotropic"); // find how to use this with wasm :S
     context.get_extension("OES_texture_float_linear");  // enable linear filtering on floating textures
 
-    // debug stuff
+    #[cfg(debug_assertions)]
+    {
+      log!("Enabling debug extensions.");
     context.get_extension("WEBGL_debug_renderer_info");
     context.get_extension("WEBGL_debug_shaders");
+    }
 
     // unused stuff
     // context.get_extension("OVR_multiview2"); // for VR stuff, keep here for future reference
@@ -140,8 +142,8 @@ impl App {
       current_scene: usize::MAX,
     };
 
-    log!("Setup...");
-    app.setup();
+    log!("setup_shaders()");
+    app.setup_shaders().expect("Shader error");
 
     app.scenes.push(Box::new(Scene1::new()));
     app.current_scene = 0;
@@ -222,14 +224,6 @@ impl App {
     log!("Starting render loop...");
     web_sys::window().unwrap().request_animation_frame(
       g.borrow().as_ref().unwrap().as_ref().unchecked_ref());
-  }
-
-
-  fn setup(&mut self) -> Result<(), String> {
-    log!("setup_shaders()");
-    self.setup_shaders().expect("Shader error");
-
-    Ok(())
   }
 
 
