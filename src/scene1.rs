@@ -53,7 +53,6 @@ impl Scene for Scene1 {
     let view_projection = projection * view;
 
     let mut view_projection_array = Vec::new();
-    // let mut position_array = Vec::new();
 
     for _ in 0..128 {
       let scale_factor = rng.urand() * 0.75 + 0.25;
@@ -69,23 +68,18 @@ impl Scene for Scene1 {
       let scale = Mat4::from_scale(dir);
 
       view_projection_array.push(view_projection * mv * scale);
-      // position_array.push(pos);
     };
 
-    // self.cube.update_mvp(utils::as_f32_slice(view_projection_array.as_slice(), 4 * 4));
-    // self.cube.update_positions(&gl, utils::as_f32_slice(position_array.as_slice(), 3));
+    app.cube.update_mvp(utils::as_f32_slice(view_projection_array.as_slice(), 4 * 4));
 
     gl.use_program(app.programs[Programs::Cube as usize].as_ref());
-    //let location = gl.get_uniform_location(self.programs[Programs::Cube as usize].as_ref().unwrap(), "camera");
-
-    //gl.uniform_matrix4fv_with_f32_array(location.as_ref(), false, &m.to_cols_array());
-    //let location = gl.get_uniform_location(self.programs[Programs::Cube as usize].as_ref().unwrap(), "camera_position");
-    //gl.uniform3f(location.as_ref(), camera_position.x, camera_position.y, camera_position.z);
+    let location = gl.get_uniform_location(app.programs[Programs::Cube as usize].as_ref().unwrap(), "camera_position");
+    gl.uniform3f(location.as_ref(), camera_position.x, camera_position.y, camera_position.z);
 
     gl.depth_func(Gl::GREATER);
     gl.clear_depth(0.0);
     gl.enable(Gl::DEPTH_TEST);
-    // self.cube.draw_instanced(view_projection_array.len() as i32);
+    app.cube.draw_instanced(view_projection_array.len() as i32);
     gl.disable(Gl::DEPTH_TEST);
 
     let mut lines = Vec::new();
