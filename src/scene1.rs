@@ -1,7 +1,7 @@
 use crate::app::{App, Programs};
 use crate::fullscreen_buffers::{self, ScreenBuffers};
 use crate::scene::Scene;
-use crate::{fast_rand, line_2d_strip, utils};
+use crate::{fast_rand, half_cube, line_2d_strip, utils};
 use glam::{Mat4, Vec3};
 use serde::Serialize;
 use std::{panic};
@@ -13,20 +13,23 @@ use web_sys::{WebGlProgram, WebGl2RenderingContext, WebGlShader};
 type Gl = WebGl2RenderingContext;
 
 pub struct Scene1 {
+  app: Rc<RefCell<App>>,
+}
 
+
+impl Scene1 {
+  pub fn new(app: Rc<RefCell<App>>) -> Self {
+    Self {
+      app,
+    }
+  }
 }
 
 
 impl Scene for Scene1 {
-  fn new() -> Self {
-    Self {
+  /* fn init(&mut self) {
 
-    }
-  }
-
-  fn init(&mut self) {
-
-  }
+  } */
 
 
   fn on_frame(&self, app: &App) {

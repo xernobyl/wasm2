@@ -3,6 +3,8 @@ Store a cube as a FAN of visible faces, do fancy stuff on vertex shader.
 Might be "optimal", according to people on the internet.
 */
 
+use std::rc::Rc;
+
 use web_sys::{WebGl2RenderingContext, WebGlBuffer, WebGlVertexArrayObject};
 
 type Gl = WebGl2RenderingContext;
@@ -10,8 +12,8 @@ type Gl = WebGl2RenderingContext;
 use crate::utils::as_u8_slice;
 
 
-pub struct HalfCube<'a> {
-  gl: &'a Gl,
+pub struct HalfCube {
+  gl: Rc<Gl>,
   vao: WebGlVertexArrayObject,
   index_buffer: WebGlBuffer,
   vertex_buffer: WebGlBuffer,
@@ -20,8 +22,8 @@ pub struct HalfCube<'a> {
 }
 
 
-impl <'a> HalfCube<'a> {
-  pub fn init(gl: &'a Gl) -> Self {
+impl HalfCube {
+  pub fn new(gl: Rc<Gl>) -> Self {
     const INDEX_BUFFER: [u8; 8] = [0, 1, 2, 3, 4, 5, 6, 1];
     const VERTEX_BUFFER: [i8; 7 * 3] = [
       1, 1, 1,
@@ -117,7 +119,7 @@ impl <'a> HalfCube<'a> {
 }
 
 
-impl <'a> Drop for HalfCube<'a> {
+impl Drop for HalfCube {
   fn drop(&mut self) {
     self.gl.delete_vertex_array(Some(&self.vao));
     self.gl.delete_buffer(Some(&self.vertex_buffer));

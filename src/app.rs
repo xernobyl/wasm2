@@ -1,4 +1,5 @@
 use crate::fullscreen_buffers::{self, ScreenBuffers};
+use crate::half_cube::{self, HalfCube};
 use crate::scene::Scene;
 use crate::scene1::Scene1;
 use serde::Serialize;
@@ -22,7 +23,7 @@ pub enum Programs {
 
 
 pub struct App {
-  pub context: Gl,
+  pub context: Rc<Gl>,
   pub programs: [Option<web_sys::WebGlProgram>; Programs::NPrograms as usize],
   pub current_frame: u32,
   pub delta_time: f64,
@@ -33,6 +34,7 @@ pub struct App {
   pub max_height: u32,
   pub aspect_ratio: f32,
   pub fullscreen_buffers: ScreenBuffers,
+  pub cube: HalfCube,
   new_width: u32, // set this whenever there are resizes
   new_height: u32,
   scenes: Vec<Box<dyn Scene>>,
@@ -40,7 +42,7 @@ pub struct App {
 }
 
 
-impl App {
+impl  App {
   pub fn init() {
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
@@ -109,8 +111,8 @@ impl App {
     #[cfg(debug_assertions)]
     {
       log!("Enabling debug extensions.");
-    context.get_extension("WEBGL_debug_renderer_info");
-    context.get_extension("WEBGL_debug_shaders");
+      context.get_extension("WEBGL_debug_renderer_info");
+      context.get_extension("WEBGL_debug_shaders");
     }
 
     // unused stuff
@@ -123,9 +125,11 @@ impl App {
     let fullscreen_buffers = fullscreen_buffers::ScreenBuffers::init(&context, &(width as i32), &(height as i32)).unwrap();
     let screen = web_sys::window().unwrap().screen().unwrap();
 
+    let rc_context = Rc::new(context);
+
     let mut app = App {
-      context,
-      // cube: half_cube::HalfCube::init(&context),
+      context: rc_context.clone(),
+      cube: half_cube::HalfCube::new(rc_context.clone()),
       programs: Default::default(),
       current_frame: 0,
       current_timestamp: 0.0,
@@ -145,12 +149,13 @@ impl App {
     log!("setup_shaders()");
     app.setup_shaders().expect("Shader error");
 
-    app.scenes.push(Box::new(Scene1::new()));
+    let app_rc0 = Rc::new(RefCell::new(app));
+    log!("Init scenes");
+    let mut app = app_rc0.borrow_mut();
+    app.scenes.push(Box::new(Scene1::new(app_rc0.clone())));
     app.current_scene = 0;
 
-    let app_rc = Rc::new(RefCell::new(app));
-
-    let app = app_rc.clone();
+    let app_rc = app_rc0.clone();
     let closure = Closure::wrap(Box::new(move || {
       let width = canvas.client_width() as u32;
       let height = canvas.client_height() as u32;
@@ -158,7 +163,7 @@ impl App {
       if width != 0 && height != 0 && canvas.width() != width && canvas.height() != height {
         canvas.set_width(width);
         canvas.set_height(height);
-        let mut app = app.borrow_mut();
+        let mut app = app_rc.borrow_mut();
         app.new_width = width;
         app.new_height = height;
       }
@@ -167,6 +172,7 @@ impl App {
     web_sys::window().unwrap().set_onresize(Option::Some(closure.as_ref().unchecked_ref()));
     closure.forget();
 
+    let app_rc = app_rc0.clone();
     let f = Rc::new(RefCell::new(None));
     let g = f.clone();
 
@@ -207,8 +213,6 @@ impl App {
         scene.on_frame(&app);
       }
       else {
-        // app.on_frame(resized);
-
         // _NO SIGNAL_
         let gl = &app.context;
         gl.bind_framebuffer(Gl::FRAMEBUFFER, None);
@@ -333,3 +337,12 @@ impl App {
     }
   }
 }
+
+
+/*
+impl Drop for App {
+  fn drop(&mut self) {
+      // TODO: ...this should never be called
+  }
+}
+*/
