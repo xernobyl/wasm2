@@ -6,16 +6,15 @@ use wasm_bindgen::prelude::*;
 mod utils;
 
 mod app;
-mod half_cube;
-mod fullscreen_buffers;
 mod fast_rand;
+mod fullscreen_buffers;
+mod half_cube;
 mod line_2d_strip;
 mod scene;
 mod scene1;
 
-
 #[wasm_bindgen(start)]
 pub fn main() -> Result<(), JsValue> {
-  app::App::init();
-  Ok(())
+    app::App::init();
+    Ok(())
 }

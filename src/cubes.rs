@@ -2,13 +2,8 @@
 Render some axis aligned cubes... Bounding objects for marching?
 */
 
-struct Cubes {
-
-}
-
+struct Cubes {}
 
 impl Cubes {
-  fn draw_all() {
-
-  }
+    fn draw_all() {}
 }
