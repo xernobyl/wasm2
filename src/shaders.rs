@@ -1,7 +1,11 @@
+use std::{borrow::Borrow, rc::Rc};
+
 /*
 Shaders
 */
-
+use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
+type Gl = WebGl2RenderingContext;
+use wasm_bindgen::prelude::JsValue;
 enum Programs {
     Screen,
     Cube,
@@ -10,51 +14,51 @@ enum Programs {
     NPrograms,
 }
 
-fn setup_shaders(&mut self) -> Result<(), JsValue> {
-    let gl = &self.context;
+pub fn setup_shaders(gl: Rc<Gl>, programs: &mut [Option<WebGlProgram>]) -> Result<(), JsValue> {
+    let gl = gl.borrow();
 
     let vert_shader =
-        Self::compile_shader(gl, Gl::VERTEX_SHADER, include_str!("glsl/screen.vert"))?;
+        compile_shader(gl, Gl::VERTEX_SHADER, include_str!("glsl/screen.vert"))?;
     let frag_shader =
-        Self::compile_shader(gl, Gl::FRAGMENT_SHADER, include_str!("glsl/screen.frag"))?;
-    self.programs[Programs::Screen as usize] =
-        Some(Self::link_program(gl, &vert_shader, &frag_shader)?);
+        compile_shader(gl, Gl::FRAGMENT_SHADER, include_str!("glsl/screen.frag"))?;
+    programs[Programs::Screen as usize] =
+        Some(link_program(gl, &vert_shader, &frag_shader)?);
     gl.delete_shader(Some(&frag_shader));
     gl.delete_shader(Some(&vert_shader));
 
     let vert_shader =
-        Self::compile_shader(gl, Gl::VERTEX_SHADER, include_str!("glsl/cube_basic.vert"))?;
-    let frag_shader = Self::compile_shader(
+        compile_shader(gl, Gl::VERTEX_SHADER, include_str!("glsl/cube_basic.vert"))?;
+    let frag_shader = compile_shader(
         gl,
         Gl::FRAGMENT_SHADER,
         include_str!("glsl/cube_basic.frag"),
     )?;
-    self.programs[Programs::Cube as usize] =
-        Some(Self::link_program(gl, &vert_shader, &frag_shader)?);
+    programs[Programs::Cube as usize] =
+        Some(link_program(gl, &vert_shader, &frag_shader)?);
     gl.delete_shader(Some(&frag_shader));
     gl.delete_shader(Some(&vert_shader));
 
     let vert_shader =
-        Self::compile_shader(gl, Gl::VERTEX_SHADER, include_str!("glsl/max_min.vert"))?;
-    let frag_shader = Self::compile_shader(
+        compile_shader(gl, Gl::VERTEX_SHADER, include_str!("glsl/max_min.vert"))?;
+    let frag_shader = compile_shader(
         gl,
         Gl::FRAGMENT_SHADER,
         include_str!("glsl/depth_max_min.frag"),
     )?;
-    self.programs[Programs::DepthMaxMin0 as usize] =
-        Some(Self::link_program(gl, &vert_shader, &frag_shader)?);
+    programs[Programs::DepthMaxMin0 as usize] =
+        Some(link_program(gl, &vert_shader, &frag_shader)?);
     gl.delete_shader(Some(&frag_shader));
     gl.delete_shader(Some(&vert_shader));
 
     let vert_shader =
-        Self::compile_shader(gl, Gl::VERTEX_SHADER, include_str!("glsl/max_min.vert"))?;
-    let frag_shader = Self::compile_shader(
+        compile_shader(gl, Gl::VERTEX_SHADER, include_str!("glsl/max_min.vert"))?;
+    let frag_shader = compile_shader(
         gl,
         Gl::FRAGMENT_SHADER,
         include_str!("glsl/max_min_max_min.frag"),
     )?;
-    self.programs[Programs::DepthMaxMin1 as usize] =
-        Some(Self::link_program(gl, &vert_shader, &frag_shader)?);
+    programs[Programs::DepthMaxMin1 as usize] =
+        Some(link_program(gl, &vert_shader, &frag_shader)?);
     gl.delete_shader(Some(&frag_shader));
     gl.delete_shader(Some(&vert_shader));
 

@@ -12,6 +12,7 @@ mod half_cube;
 mod line_2d_strip;
 mod scene;
 mod scene1;
+mod shaders;
 
 #[wasm_bindgen(start)]
 pub fn main() -> Result<(), JsValue> {

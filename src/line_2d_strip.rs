@@ -10,20 +10,22 @@ Maybe render lines (2 verts) to a buffer using
 transform feedback, and reusing it as a strip?
 */
 
+use std::rc::Rc;
+
 use web_sys::{WebGl2RenderingContext, WebGlBuffer, WebGlVertexArrayObject};
 
 type Gl = WebGl2RenderingContext;
 
 use crate::utils::as_u8_slice;
 
-pub struct Line2DStrip<'a> {
-    gl: &'a Gl,
+pub struct Line2DStrip {
+    gl: Rc<Gl>,
     vao: WebGlVertexArrayObject,
     position_buffer: WebGlBuffer,
 }
 
-impl<'a> Line2DStrip<'a> {
-    pub fn new(gl: &'a Gl) -> Self {
+impl Line2DStrip {
+    pub fn new(gl: Rc<Gl>) -> Self {
         let vao = gl.create_vertex_array().expect("Error creating VAO.");
         gl.bind_vertex_array(Some(&vao));
 
@@ -74,7 +76,7 @@ impl<'a> Line2DStrip<'a> {
     }
 }
 
-impl<'a> Drop for Line2DStrip<'a> {
+impl Drop for Line2DStrip {
     fn drop(&mut self) {
         self.gl.delete_vertex_array(Some(&self.vao));
         self.gl.delete_buffer(Some(&self.position_buffer));

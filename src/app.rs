@@ -2,6 +2,7 @@ use crate::fullscreen_buffers::{self, ScreenBuffers};
 use crate::half_cube::{self, HalfCube};
 use crate::scene::Scene;
 use crate::scene1::Scene1;
+use crate::shaders::setup_shaders;
 use serde::Serialize;
 use std::panic;
 use std::{cell::RefCell, rc::Rc};
@@ -153,13 +154,16 @@ impl App {
         };
 
         log!("setup_shaders()");
-        app.setup_shaders().expect("Shader error");
+        setup_shaders(rc_context.clone(), &mut app.programs).expect("Shader error");
 
         let app_rc0 = Rc::new(RefCell::new(app));
+
         log!("Init scenes");
-        let mut app = app_rc0.borrow_mut();
-        app.scenes.push(Box::new(Scene1::new(app_rc0.clone())));
-        app.current_scene = 0;
+        /*{
+            let mut app = app_rc0.as_ptr();
+            (*app).scenes.push(Box::new(Scene1::new(app_rc0.clone())));
+            (*app).current_scene = 0;
+        }*/
 
         let app_rc = app_rc0.clone();
         let closure = Closure::wrap(Box::new(move || {
@@ -195,7 +199,7 @@ impl App {
             app.delta_time = timestamp - app.current_timestamp;
             app.current_timestamp = timestamp;
 
-            let resized = if app.new_width > 0 {
+            let _resized = if app.new_width > 0 {
                 if app.max_height < app.new_height {
                     app.max_height = app.new_height;
                 }
@@ -256,44 +260,6 @@ impl App {
         Ok(())
     }
 
-    fn setup_shaders(&mut self) -> Result<(), JsValue> {
-        self.create_shader(
-            Programs::Screen as usize,
-            include_str!("glsl/screen.vert"),
-            include_str!("glsl/screen.frag"),
-        )?;
-
-        self.create_shader(
-            Programs::Cube as usize,
-            include_str!("glsl/cube_basic.vert"),
-            include_str!("glsl/cube_basic.frag"),
-        )?;
-
-        self.create_shader(
-            Programs::Line2DStrip as usize,
-            include_str!("glsl/line_2d_strip.vert"),
-            include_str!("glsl/line_2d_strip.frag"),
-        )?;
-
-        /*let vert_shader = Self::compile_shader(gl,
-          Gl::VERTEX_SHADER, include_str!("glsl/max_min.vert"))?;
-        let frag_shader = Self::compile_shader(gl,
-          Gl::FRAGMENT_SHADER, include_str!("glsl/depth_max_min.frag"))?;
-        self.programs[Programs::DepthMaxMin0 as usize] = Some(Self::link_program(gl, &vert_shader, &frag_shader)?);
-        gl.delete_shader(Some(&frag_shader));
-        gl.delete_shader(Some(&vert_shader));
-
-        let vert_shader = Self::compile_shader(gl,
-          Gl::VERTEX_SHADER, include_str!("glsl/max_min.vert"))?;
-        let frag_shader = Self::compile_shader(gl,
-          Gl::FRAGMENT_SHADER, include_str!("glsl/max_min_max_min.frag"))?;
-        self.programs[Programs::DepthMaxMin1 as usize] = Some(Self::link_program(gl, &vert_shader, &frag_shader)?);
-        gl.delete_shader(Some(&frag_shader));
-        gl.delete_shader(Some(&vert_shader));*/
-
-        Ok(())
-    }
-
     fn compile_shader(context: &Gl, shader_type: u32, source: &str) -> Result<WebGlShader, String> {
         let shader = context
             .create_shader(shader_type)
@@ -340,11 +306,3 @@ impl App {
         }
     }
 }
-
-/*
-impl Drop for App {
-  fn drop(&mut self) {
-      // TODO: ...this should never be called
-  }
-}
-*/
