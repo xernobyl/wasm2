@@ -159,11 +159,9 @@ impl App {
         let app_rc0 = Rc::new(RefCell::new(app));
 
         log!("Init scenes");
-        /*{
-            let mut app = app_rc0.as_ptr();
-            (*app).scenes.push(Box::new(Scene1::new(app_rc0.clone())));
-            (*app).current_scene = 0;
-        }*/
+        let mut app = app_rc0.borrow_mut();
+        app.scenes.push(Box::new(Scene1::new(app_rc0.clone())));
+        app.current_scene = 0;
 
         let app_rc = app_rc0.clone();
         let closure = Closure::wrap(Box::new(move || {
