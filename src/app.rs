@@ -2,7 +2,7 @@ use crate::fullscreen_buffers::{self, ScreenBuffers};
 use crate::half_cube::{self, HalfCube};
 use crate::scene::Scene;
 use crate::scene1::Scene1;
-use crate::shaders::setup_shaders;
+use crate::shaders::{Programs, setup_shaders};
 use serde::Serialize;
 use std::panic;
 use std::{cell::RefCell, rc::Rc};
@@ -12,14 +12,6 @@ use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
 
 type Gl = WebGl2RenderingContext;
 
-pub enum Programs {
-    Screen,
-    Cube,
-    Line2DStrip,
-    DepthMaxMin0,
-    DepthMaxMin1,
-    NPrograms,
-}
 
 pub struct App {
     pub context: Rc<Gl>,
@@ -188,11 +180,13 @@ impl App {
         let g = f.clone();
 
         let closure = Closure::wrap(Box::new(move |timestamp| {
-            web_sys::window().unwrap().request_animation_frame(
-                (f.borrow().as_ref().unwrap() as &Closure<dyn FnMut(f64)>)
-                    .as_ref()
-                    .unchecked_ref(),
-            );
+            #[allow(unused_must_use)] {
+                web_sys::window().unwrap().request_animation_frame(
+                    (f.borrow().as_ref().unwrap() as &Closure<dyn FnMut(f64)>)
+                        .as_ref()
+                        .unchecked_ref(),
+                );
+            }
 
             let mut app = app_rc.borrow_mut();
             app.delta_time = timestamp - app.current_timestamp;
@@ -237,9 +231,11 @@ impl App {
         *g.borrow_mut() = Some(closure);
 
         log!("Starting render loop...");
-        web_sys::window()
+        #[allow(unused_must_use)] {
+            web_sys::window()
             .unwrap()
             .request_animation_frame(g.borrow().as_ref().unwrap().as_ref().unchecked_ref());
+        }
     }
 
     fn create_shader(

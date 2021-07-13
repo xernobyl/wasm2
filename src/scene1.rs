@@ -1,8 +1,10 @@
-use crate::app::{App, Programs};
+use crate::app::{App};
 use crate::line_2d_strip::Line2DStrip;
 use crate::scene::Scene;
+use crate::shaders::Programs;
 use crate::{fast_rand, line_2d_strip, utils};
 use glam::{Mat4, Vec3};
+use std::borrow::Borrow;
 use std::{rc::Rc, cell::RefCell};
 use web_sys::{WebGl2RenderingContext};
 
@@ -88,10 +90,10 @@ impl Scene for Scene1 {
         // lines.push(0.05);
         }
 
-        self.line_strip.update_points(lines.as_slice());
+        self.line_strip.update_points(&gl, lines.as_slice());
 
         gl.use_program(app.programs[Programs::Line2DStrip as usize].as_ref());
-        self.line_strip.draw(500 - 3);
+        self.line_strip.draw(&gl, 500 - 3);
 
         // screen pass
         gl.bind_framebuffer(Gl::FRAMEBUFFER, None);
@@ -107,5 +109,10 @@ impl Scene for Scene1 {
 }
 
 impl Drop for Scene1 {
-    fn drop(&mut self) {}
+    fn drop(&mut self) {
+        let app = self.app.borrow_mut();
+        let gl: &Gl = app.context.borrow();
+        // TODO: destroy stuff
+
+    }
 }

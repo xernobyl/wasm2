@@ -10,7 +10,7 @@ Maybe render lines (2 verts) to a buffer using
 transform feedback, and reusing it as a strip?
 */
 
-use std::rc::Rc;
+use std::{borrow::Borrow, rc::Rc};
 
 use web_sys::{WebGl2RenderingContext, WebGlBuffer, WebGlVertexArrayObject};
 
@@ -25,7 +25,10 @@ pub struct Line2DStrip {
 }
 
 impl Line2DStrip {
-    pub fn new(gl: Rc<Gl>) -> Self {
+    pub fn new(gl_rc: Rc<Gl>) -> Self {
+        log!("new line strip");
+
+        let gl: &Gl = gl_rc.borrow();
         let vao = gl.create_vertex_array().expect("Error creating VAO.");
         gl.bind_vertex_array(Some(&vao));
 
@@ -53,32 +56,32 @@ impl Line2DStrip {
         gl.vertex_attrib_divisor(3, 1);
 
         Self {
-            gl,
+            gl: gl_rc,
             vao,
             position_buffer,
         }
     }
 
-    pub fn draw(&self, count: i32) {
-        self.gl.bind_vertex_array(Some(&self.vao));
-        self.gl
-            .draw_arrays_instanced(Gl::TRIANGLE_STRIP, 0, 4, count);
+    pub fn draw(&self, gl: &Gl, count: i32) {
+        gl.bind_vertex_array(Some(&self.vao));
+        gl.draw_arrays_instanced(Gl::TRIANGLE_STRIP, 0, 4, count);
     }
 
-    pub fn update_points(&self, points: &[f32]) {
+    pub fn update_points(&self, gl: &Gl, points: &[f32]) {
         /* format for points is x, y, width */
 
-        self.gl.bind_vertex_array(Some(&self.vao));
-        self.gl
-            .bind_buffer(Gl::ARRAY_BUFFER, Some(&self.position_buffer));
-        self.gl
-            .buffer_data_with_u8_array(Gl::ARRAY_BUFFER, as_u8_slice(points), Gl::DYNAMIC_DRAW);
+        gl.bind_vertex_array(Some(&self.vao));
+        gl.bind_buffer(Gl::ARRAY_BUFFER, Some(&self.position_buffer));
+        gl.buffer_data_with_u8_array(Gl::ARRAY_BUFFER, as_u8_slice(points), Gl::DYNAMIC_DRAW);
     }
 }
 
 impl Drop for Line2DStrip {
     fn drop(&mut self) {
-        self.gl.delete_vertex_array(Some(&self.vao));
-        self.gl.delete_buffer(Some(&self.position_buffer));
+        log!("drop line strip");
+        let gl: &Gl = self.gl.borrow();
+
+        gl.delete_vertex_array(Some(&self.vao));
+        gl.delete_buffer(Some(&self.position_buffer));
     }
 }
