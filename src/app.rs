@@ -2,7 +2,7 @@ use crate::fullscreen_buffers::{self, ScreenBuffers};
 use crate::half_cube::{self, HalfCube};
 use crate::scene::Scene;
 use crate::scene1::Scene1;
-use crate::shaders::{Programs, setup_shaders};
+use crate::shaders::{setup_shaders, Programs};
 use serde::Serialize;
 use std::panic;
 use std::{cell::RefCell, rc::Rc};
@@ -11,7 +11,6 @@ use wasm_bindgen::JsCast;
 use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
 
 type Gl = WebGl2RenderingContext;
-
 
 pub struct App {
     pub context: Rc<Gl>,
@@ -56,12 +55,16 @@ impl App {
             .unwrap()
             .dyn_into::<web_sys::HtmlCanvasElement>()
             .unwrap();
-        canvas.style().set_property("position", "fixed");
-        canvas.style().set_property("left", "0");
-        canvas.style().set_property("top", "0");
-        canvas.style().set_property("width", "100%");
-        canvas.style().set_property("height", "100%");
-        document.body().unwrap().append_child(&canvas);
+
+        #[allow(unused_must_use)]
+        {
+            canvas.style().set_property("position", "fixed");
+            canvas.style().set_property("left", "0");
+            canvas.style().set_property("top", "0");
+            canvas.style().set_property("width", "100%");
+            canvas.style().set_property("height", "100%");
+            document.body().unwrap().append_child(&canvas);
+        }
 
         let width = canvas.client_width() as u32;
         let height = canvas.client_height() as u32;
@@ -100,16 +103,22 @@ impl App {
 
         log!("Created context...");
 
-        context.get_extension("EXT_color_buffer_float"); // enable a bunch of types
-                                                         // context.get_extension("EXT_float_blend"); // blend on 32 bit components, shouldn't be needed but keep here just in case
-                                                         // context.get_extension("EXT_texture_filter_anisotropic"); // find how to use this with wasm :S
-        context.get_extension("OES_texture_float_linear"); // enable linear filtering on floating textures
+        #[allow(unused_must_use)]
+        {
+            //context.get_extension("EXT_float_blend"); // blend on 32 bit components, shouldn't be needed but keep here just in case
+            //context.get_extension("EXT_texture_filter_anisotropic"); // find how to use this with wasm :S
+            context.get_extension("EXT_color_buffer_float"); // enable a bunch of types
+            context.get_extension("OES_texture_float_linear"); // enable linear filtering on floating textures
+        }
 
         #[cfg(debug_assertions)]
         {
             log!("Enabling debug extensions.");
-            context.get_extension("WEBGL_debug_renderer_info");
-            context.get_extension("WEBGL_debug_shaders");
+            #[allow(unused_must_use)]
+            {
+                context.get_extension("WEBGL_debug_renderer_info");
+                context.get_extension("WEBGL_debug_shaders");
+            }
         }
 
         // unused stuff
@@ -146,7 +155,7 @@ impl App {
         };
 
         log!("setup_shaders()");
-        setup_shaders(rc_context.clone(), &mut app.programs).expect("Shader error");
+        setup_shaders(rc_context, &mut app.programs).expect("Shader error");
 
         let app_rc0 = Rc::new(RefCell::new(app));
 
@@ -180,7 +189,8 @@ impl App {
         let g = f.clone();
 
         let closure = Closure::wrap(Box::new(move |timestamp| {
-            #[allow(unused_must_use)] {
+            #[allow(unused_must_use)]
+            {
                 web_sys::window().unwrap().request_animation_frame(
                     (f.borrow().as_ref().unwrap() as &Closure<dyn FnMut(f64)>)
                         .as_ref()
@@ -231,73 +241,11 @@ impl App {
         *g.borrow_mut() = Some(closure);
 
         log!("Starting render loop...");
-        #[allow(unused_must_use)] {
+        #[allow(unused_must_use)]
+        {
             web_sys::window()
-            .unwrap()
-            .request_animation_frame(g.borrow().as_ref().unwrap().as_ref().unchecked_ref());
-        }
-    }
-
-    fn create_shader(
-        &mut self,
-        program: usize,
-        vert: &'static str,
-        frag: &'static str,
-    ) -> Result<(), JsValue> {
-        let gl = &self.context;
-
-        let vert_shader = Self::compile_shader(gl, Gl::VERTEX_SHADER, vert)?;
-        let frag_shader = Self::compile_shader(gl, Gl::FRAGMENT_SHADER, frag)?;
-        self.programs[program] = Some(Self::link_program(gl, &vert_shader, &frag_shader)?);
-        gl.delete_shader(Some(&frag_shader));
-        gl.delete_shader(Some(&vert_shader));
-
-        Ok(())
-    }
-
-    fn compile_shader(context: &Gl, shader_type: u32, source: &str) -> Result<WebGlShader, String> {
-        let shader = context
-            .create_shader(shader_type)
-            .ok_or_else(|| String::from("Unable to create shader object"))?;
-        context.shader_source(&shader, source);
-        context.compile_shader(&shader);
-
-        if context
-            .get_shader_parameter(&shader, Gl::COMPILE_STATUS)
-            .as_bool()
-            .unwrap_or(false)
-        {
-            Ok(shader)
-        } else {
-            Err(context
-                .get_shader_info_log(&shader)
-                .unwrap_or_else(|| String::from("Unknown error getting shader info log")))
-        }
-    }
-
-    fn link_program(
-        context: &Gl,
-        vert_shader: &WebGlShader,
-        frag_shader: &WebGlShader,
-    ) -> Result<WebGlProgram, String> {
-        let program = context
-            .create_program()
-            .ok_or_else(|| String::from("Unable to create shader object"))?;
-
-        context.attach_shader(&program, vert_shader);
-        context.attach_shader(&program, frag_shader);
-        context.link_program(&program);
-
-        if !context
-            .get_program_parameter(&program, Gl::LINK_STATUS)
-            .as_bool()
-            .unwrap_or(false)
-        {
-            Err(context
-                .get_program_info_log(&program)
-                .unwrap_or_else(|| String::from("Unknown error creating program object")))
-        } else {
-            Ok(program)
+                .unwrap()
+                .request_animation_frame(g.borrow().as_ref().unwrap().as_ref().unchecked_ref());
         }
     }
 }
