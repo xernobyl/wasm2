@@ -8,7 +8,7 @@ use std::panic;
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
+use web_sys::WebGl2RenderingContext;
 
 type Gl = WebGl2RenderingContext;
 
@@ -224,12 +224,13 @@ impl App {
                 false
             };
 
+            let gl = &app.context;
+
             if app.current_scene != usize::MAX {
                 let scene = app.scenes[app.current_scene].as_ref();
-                scene.on_frame(&app);
+                scene.on_frame(gl, &app);
             } else {
                 // _NO SIGNAL_
-                let gl = &app.context;
                 gl.bind_framebuffer(Gl::FRAMEBUFFER, None);
                 gl.clear_color(0.0, 0.0, 1.0, 1.0);
                 gl.clear(Gl::COLOR_BUFFER_BIT);

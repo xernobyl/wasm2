@@ -31,17 +31,17 @@ impl Scene for Scene1 {
 
     } */
 
-    fn on_frame(&self, app: &App) {
+    fn on_frame(&self, gl: &Gl, app: &App) {
         /*
         Use infinite inverted depth buffer because of the better precision
         */
 
-        let gl = &app.context;
+        // let gl = &app.context;
         let mut rng = fast_rand::FastRand::new(3464357);
 
         // log!0"Frame: {}\nTimestamp: {}", self.current_frame, self.current_timestamp);
 
-        app.fullscreen_buffers.bind(&gl);
+        app.fullscreen_buffers.bind(gl);
         gl.clear_color(rng.urand(), rng.urand(), rng.urand(), rng.urand());
         gl.clear(Gl::DEPTH_BUFFER_BIT | Gl::COLOR_BUFFER_BIT);
 
@@ -112,10 +112,10 @@ impl Scene for Scene1 {
             lines.push(rng.urand() * 0.05);
         }
 
-        self.line_strip.update_points(&gl, lines.as_slice());
+        self.line_strip.update_points(gl, lines.as_slice());
 
         gl.use_program(app.programs[Programs::Line2DStrip as usize].as_ref());
-        self.line_strip.draw(&gl, 500 - 3);
+        self.line_strip.draw(gl, 500 - 3);
 
         // screen pass
         gl.bind_framebuffer(Gl::FRAMEBUFFER, None);
@@ -129,7 +129,7 @@ impl Scene for Scene1 {
         gl.active_texture(Gl::TEXTURE0);
         gl.bind_texture(Gl::TEXTURE_2D, Some(&app.fullscreen_buffers.color_texture));
         gl.uniform1i(location.as_ref(), 0);
-        utils::fullscreen_quad(&gl);
+        utils::fullscreen_quad(gl);
     }
 }
 

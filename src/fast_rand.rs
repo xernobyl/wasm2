@@ -24,7 +24,7 @@ impl FastRand {
 
     pub fn urand(&mut self) -> f32 {
         unsafe {
-            self.seed.i = self.seed.i * Wrapping(16807i32);
+            self.seed.i *= Wrapping(16807i32);
             let c = RandCastAssist {
                 u: (self.seed.u >> 9) | Wrapping(0x3f800000),
             };
@@ -34,7 +34,7 @@ impl FastRand {
 
     pub fn rand(&mut self) -> f32 {
         unsafe {
-            self.seed.i = self.seed.i * Wrapping(16807i32);
+            self.seed.i *= Wrapping(16807i32);
             let c = RandCastAssist {
                 u: (self.seed.u >> 9) | Wrapping(0x40000000),
             };
