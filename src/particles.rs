@@ -11,17 +11,16 @@ type Gl = WebGl2RenderingContext;
 
 use crate::utils::as_u8_slice;
 
-pub struct Particles {
-    gl: Rc<Gl>,
+pub struct Particles<'a> {
+    gl: &'a Gl,
     vao: WebGlVertexArrayObject,
     position_buffer: WebGlBuffer,
 }
 
-impl Particles {
-    pub fn new(gl_rc: Rc<Gl>) -> Self {
+impl <'a> Particles<'a> {
+    pub fn new(gl: &'a Gl) -> Self {
         log!("new particles");
 
-        let gl: &Gl = gl_rc.borrow();
         let vao = gl.create_vertex_array().expect("Error creating VAO.");
         gl.bind_vertex_array(Some(&vao));
 
@@ -36,7 +35,7 @@ impl Particles {
         gl.enable_vertex_attrib_array(0);
 
         Self {
-            gl: gl_rc,
+            gl,
             vao,
             position_buffer,
         }
@@ -65,7 +64,7 @@ impl Particles {
     }
 }
 
-impl Drop for Particles {
+impl <'a> Drop for Particles<'a> {
     fn drop(&mut self) {
         log!("drop particles");
         let gl: &Gl = self.gl.borrow();

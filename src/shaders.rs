@@ -11,6 +11,7 @@ pub enum Programs {
     Screen,
     Cube,
     Line2DStrip,
+    Particles,
     DepthMaxMin0,
     DepthMaxMin1,
     NPrograms,
@@ -70,6 +71,15 @@ pub fn setup_shaders(gl: Rc<Gl>, programs: &mut [Option<WebGlProgram>]) -> Resul
         include_str!("glsl/max_min_max_min.frag"),
     )?;
     programs[Programs::DepthMaxMin1 as usize] =
+        Some(link_program(gl, &vert_shader, &frag_shader)?);
+    gl.delete_shader(Some(&frag_shader));
+    gl.delete_shader(Some(&vert_shader));
+
+    let vert_shader =
+        compile_shader(gl, Gl::VERTEX_SHADER, include_str!("glsl/particles.vert"))?;
+    let frag_shader =
+        compile_shader(gl, Gl::FRAGMENT_SHADER, include_str!("glsl/particles.frag"))?;
+    programs[Programs::Particles as usize] =
         Some(link_program(gl, &vert_shader, &frag_shader)?);
     gl.delete_shader(Some(&frag_shader));
     gl.delete_shader(Some(&vert_shader));

@@ -1,5 +1,7 @@
 use crate::app::App;
+use crate::fast_rand::FastRand;
 use crate::line_2d_strip::Line2DStrip;
+use crate::particles::Particles;
 use crate::scene::Scene;
 use crate::shaders::Programs;
 use crate::{fast_rand, utils};
@@ -10,39 +12,47 @@ use web_sys::WebGl2RenderingContext;
 
 type Gl = WebGl2RenderingContext;
 
-pub struct Scene1 {
-    app: Rc<RefCell<App>>,
-    line_strip: Line2DStrip,
+pub struct Scene1<'a> {
+    app: &'a App,
+    line_strip: Line2DStrip<'a>,
+    particles: Particles<'a>,
+    particle_positions: Vec<f32>,
+    rng: FastRand,
 }
 
-impl Scene1 {
-    pub fn new(app: Rc<RefCell<App>>) -> Self {
-        let app_borrow = app.borrow_mut();
+impl <'a> Scene1<'a> {
+    pub fn new(app: &App) -> Self {
+        let mut particle_positions = Vec::new();
+        let mut rng = fast_rand::FastRand::new(3464357);
+
+        for _ in 0..32 {
+            particle_positions.push(rng.rand());
+            particle_positions.push(rng.rand());
+            particle_positions.push(rng.rand());
+        }
 
         Self {
-            line_strip: Line2DStrip::new(app_borrow.context.clone()),
+            line_strip: Line2DStrip::new(&app.context),
+            particles: Particles::new(&app.context),
             app: app.clone(),
+            particle_positions,
+            rng,
         }
     }
 }
 
-impl Scene for Scene1 {
-    /* fn init(&mut self) {
-
-    } */
-
-    fn on_frame(&self, gl: &Gl, app: &App) {
+impl <'a> Scene for Scene1<'a> {
+    fn on_frame(&mut self, app: &'a App) {
         /*
         Use infinite inverted depth buffer because of the better precision
         */
 
-        // let gl = &app.context;
-        let mut rng = fast_rand::FastRand::new(3464357);
+        let gl = &app.context;
 
         // log!0"Frame: {}\nTimestamp: {}", self.current_frame, self.current_timestamp);
 
         app.fullscreen_buffers.bind(gl);
-        gl.clear_color(rng.urand(), rng.urand(), rng.urand(), rng.urand());
+        gl.clear_color(self.rng.urand(), self.rng.urand(), self.rng.urand(), self.rng.urand());
         gl.clear(Gl::DEPTH_BUFFER_BIT | Gl::COLOR_BUFFER_BIT);
 
         let camera_position = Vec3::new(
@@ -66,7 +76,7 @@ impl Scene for Scene1 {
         let mut view_projection_array = Vec::new();
 
         for _ in 0..128 {
-            let cube_pos = Vec3::new(5.0 * rng.rand(), 5.0 * rng.rand(), 5.0 * rng.rand());
+            let cube_pos = Vec3::new(5.0 * self.rng.rand(), 5.0 * self.rng.rand(), 5.0 * self.rng.rand());
             let mv = Mat4::from_translation(cube_pos);
 
             // camera aligned cubes... save this for later, probably do it in shader
@@ -109,7 +119,7 @@ impl Scene for Scene1 {
             lines.push(f32::cos(
                 i as f32 / 500.0 * std::f32::consts::TAU + app.current_timestamp as f32 / 2000.0,
             ));
-            lines.push(rng.urand() * 0.05);
+            lines.push(self.rng.urand() * 0.05);
         }
 
         self.line_strip.update_points(gl, lines.as_slice());
@@ -133,10 +143,9 @@ impl Scene for Scene1 {
     }
 }
 
-impl Drop for Scene1 {
+impl <'a> Drop for Scene1<'a> {
     fn drop(&mut self) {
-        let app = self.app.borrow_mut();
-        let _gl: &Gl = app.context.borrow();
+        let _gl: &Gl = self.app.context.borrow();
         // TODO: destroy stuff
     }
 }

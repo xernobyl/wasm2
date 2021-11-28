@@ -1,7 +1,5 @@
 use crate::fullscreen_buffers::{self, ScreenBuffers};
 use crate::half_cube::{self, HalfCube};
-use crate::scene::Scene;
-use crate::scene1::Scene1;
 use crate::shaders::{setup_shaders, Programs};
 use serde::Serialize;
 use std::panic;
@@ -27,12 +25,10 @@ pub struct App {
     pub cube: HalfCube,
     new_width: u32, // set this whenever there are resizes
     new_height: u32,
-    scenes: Vec<Box<dyn Scene>>,
-    current_scene: usize,
 }
 
 impl App {
-    pub fn init() {
+    pub fn init(setup: &'static dyn FnMut(&App), frame: &'static dyn FnMut(&App)) {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
         struct WebGlOptions {
@@ -116,7 +112,6 @@ impl App {
             log!("Enabling debug extensions.");
             #[allow(unused_must_use)]
             {
-                context.get_extension("WEBGL_debug_renderer_info");
                 context.get_extension("WEBGL_debug_shaders");
             }
         }
@@ -150,20 +145,12 @@ impl App {
             max_width: screen.width().ok().unwrap() as u32,
             max_height: screen.height().ok().unwrap() as u32,
             fullscreen_buffers,
-            scenes: Vec::new(),
-            current_scene: usize::MAX,
         };
 
         log!("setup_shaders()");
         setup_shaders(rc_context, &mut app.programs).expect("Shader error");
 
         let app_rc0 = Rc::new(RefCell::new(app));
-
-        log!("Init scenes");
-        let scene1 = Box::new(Scene1::new(app_rc0.clone()));
-        let mut app = app_rc0.borrow_mut();
-        app.scenes.push(scene1);
-        app.current_scene = 0;
 
         let app_rc = app_rc0.clone();
         let closure = Closure::wrap(Box::new(move || {
@@ -187,6 +174,8 @@ impl App {
         let app_rc = app_rc0.clone();
         let f = Rc::new(RefCell::new(None));
         let g = f.clone();
+
+        setup(&app_rc0.borrow());
 
         let closure = Closure::wrap(Box::new(move |timestamp| {
             #[allow(unused_must_use)]
@@ -224,17 +213,7 @@ impl App {
                 false
             };
 
-            let gl = &app.context;
-
-            if app.current_scene != usize::MAX {
-                let scene = app.scenes[app.current_scene].as_ref();
-                scene.on_frame(gl, &app);
-            } else {
-                // _NO SIGNAL_
-                gl.bind_framebuffer(Gl::FRAMEBUFFER, None);
-                gl.clear_color(0.0, 0.0, 1.0, 1.0);
-                gl.clear(Gl::COLOR_BUFFER_BIT);
-            }
+            frame(&app);
 
             app.current_frame += 1;
         }) as Box<dyn FnMut(f64)>);

@@ -18,17 +18,16 @@ type Gl = WebGl2RenderingContext;
 
 use crate::utils::as_u8_slice;
 
-pub struct Line2DStrip {
-    gl: Rc<Gl>,
+pub struct Line2DStrip<'a> {
+    gl: &'a Gl,
     vao: WebGlVertexArrayObject,
     position_buffer: WebGlBuffer,
 }
 
-impl Line2DStrip {
-    pub fn new(gl_rc: Rc<Gl>) -> Self {
+impl <'a> Line2DStrip<'a> {
+    pub fn new(gl: &'a Gl) -> Self {
         log!("new line strip");
 
-        let gl: &Gl = gl_rc.borrow();
         let vao = gl.create_vertex_array().expect("Error creating VAO.");
         gl.bind_vertex_array(Some(&vao));
 
@@ -56,7 +55,7 @@ impl Line2DStrip {
         gl.vertex_attrib_divisor(3, 1);
 
         Self {
-            gl: gl_rc,
+            gl,
             vao,
             position_buffer,
         }
@@ -76,12 +75,10 @@ impl Line2DStrip {
     }
 }
 
-impl Drop for Line2DStrip {
+impl <'a> Drop for Line2DStrip<'a> {
     fn drop(&mut self) {
         log!("drop line strip");
-        let gl: &Gl = self.gl.borrow();
-
-        gl.delete_vertex_array(Some(&self.vao));
-        gl.delete_buffer(Some(&self.position_buffer));
+        self.gl.delete_vertex_array(Some(&self.vao));
+        self.gl.delete_buffer(Some(&self.position_buffer));
     }
 }
