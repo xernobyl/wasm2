@@ -2,7 +2,7 @@
 name = "wasm2"
 version = "0.0.0"
 authors = ["Tiago <1585571+xernobyl@users.noreply.github.com>"]
-edition = "2018"
+edition = "2021"
 description = "A program"
 repository = "TBD"
 

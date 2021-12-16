@@ -10,6 +10,12 @@ use web_sys::WebGl2RenderingContext;
 
 type Gl = WebGl2RenderingContext;
 
+
+pub trait AppInstance {
+    fn frame(&self, app: &App);
+}
+
+
 pub struct App {
     pub context: Rc<Gl>,
     pub programs: [Option<web_sys::WebGlProgram>; Programs::NPrograms as usize],
@@ -27,40 +33,13 @@ pub struct App {
     new_height: u32,
 }
 
-impl App {
-    pub fn init(setup: &'static dyn FnMut(&App), frame: &'static dyn FnMut(&App)) {
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct WebGlOptions {
-            alpha: bool,
-            desynchronized: bool,
-            antialias: bool,
-            depth: bool,
-            fail_if_major_performance_caveat: bool,
-            power_preference: &'static str,
-            premultiplied_alpha: bool,
-            preserve_drawing_buffer: bool,
-            stencil: bool,
-        }
 
+impl App {
+    pub fn init(app_instance: Box<dyn AppInstance>) {
         panic::set_hook(Box::new(console_error_panic_hook::hook));
 
-        let document = web_sys::window().unwrap().document().unwrap();
-        let canvas = document
-            .create_element("canvas")
-            .unwrap()
-            .dyn_into::<web_sys::HtmlCanvasElement>()
-            .unwrap();
-
-        #[allow(unused_must_use)]
-        {
-            canvas.style().set_property("position", "fixed");
-            canvas.style().set_property("left", "0");
-            canvas.style().set_property("top", "0");
-            canvas.style().set_property("width", "100%");
-            canvas.style().set_property("height", "100%");
-            document.body().unwrap().append_child(&canvas);
-        }
+        let (context, canvas) = App::create_context();
+        log!("Created context...");
 
         let width = canvas.client_width() as u32;
         let height = canvas.client_height() as u32;
@@ -74,54 +53,6 @@ impl App {
         } else {
             aspect_ratio = 1.0;
         }
-
-        log!("Created canvas ({}, {})...", width, height);
-
-        let context_options = JsValue::from_serde(&WebGlOptions {
-            alpha: false,
-            desynchronized: true,
-            antialias: false,
-            depth: false,
-            fail_if_major_performance_caveat: false, // true
-            power_preference: "high-performance",
-            premultiplied_alpha: true,
-            preserve_drawing_buffer: false,
-            stencil: false,
-        })
-        .unwrap();
-
-        let context = canvas
-            .get_context_with_context_options("webgl2", &context_options)
-            .unwrap()
-            .unwrap()
-            .dyn_into::<Gl>()
-            .unwrap();
-
-        log!("Created context...");
-
-        #[allow(unused_must_use)]
-        {
-            //context.get_extension("EXT_float_blend"); // blend on 32 bit components, shouldn't be needed but keep here just in case
-            //context.get_extension("EXT_texture_filter_anisotropic"); // find how to use this with wasm :S
-            context.get_extension("EXT_color_buffer_float"); // enable a bunch of types
-            context.get_extension("OES_texture_float_linear"); // enable linear filtering on floating textures
-        }
-
-        #[cfg(debug_assertions)]
-        {
-            log!("Enabling debug extensions.");
-            #[allow(unused_must_use)]
-            {
-                context.get_extension("WEBGL_debug_shaders");
-            }
-        }
-
-        // unused stuff
-        // context.get_extension("OVR_multiview2"); // for VR stuff, keep here for future reference
-        // context.get_extension("EXT_texture_compression_bptc");
-        // context.get_extension("EXT_texture_compression_rgtc");
-        // context.get_extension("WEBGL_compressed_texture_s3tc");
-        // context.get_extension("WEBGL_compressed_texture_s3tc_srgb");
 
         let fullscreen_buffers =
             fullscreen_buffers::ScreenBuffers::init(&context, &(width as i32), &(height as i32))
@@ -175,7 +106,9 @@ impl App {
         let f = Rc::new(RefCell::new(None));
         let g = f.clone();
 
-        setup(&app_rc0.borrow());
+        // setup(&app_rc0.borrow());
+
+        let app_instance_rc = Rc::new(app_instance);
 
         let closure = Closure::wrap(Box::new(move |timestamp| {
             #[allow(unused_must_use)]
@@ -213,7 +146,8 @@ impl App {
                 false
             };
 
-            frame(&app);
+            let app_instance = app_instance_rc.clone();
+            app_instance.frame(&app);
 
             app.current_frame += 1;
         }) as Box<dyn FnMut(f64)>);
@@ -227,5 +161,84 @@ impl App {
                 .unwrap()
                 .request_animation_frame(g.borrow().as_ref().unwrap().as_ref().unchecked_ref());
         }
+    }
+
+    fn create_context() -> (Gl, web_sys::HtmlCanvasElement) {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct WebGlOptions {
+            alpha: bool,
+            desynchronized: bool,
+            antialias: bool,
+            depth: bool,
+            fail_if_major_performance_caveat: bool,
+            power_preference: &'static str,
+            premultiplied_alpha: bool,
+            preserve_drawing_buffer: bool,
+            stencil: bool,
+        }
+
+        let document = web_sys::window().unwrap().document().unwrap();
+        let canvas = document
+            .create_element("canvas")
+            .unwrap()
+            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .unwrap();
+
+        #[allow(unused_must_use)]
+        {
+            canvas.style().set_property("position", "fixed");
+            canvas.style().set_property("left", "0");
+            canvas.style().set_property("top", "0");
+            canvas.style().set_property("width", "100%");
+            canvas.style().set_property("height", "100%");
+            document.body().unwrap().append_child(&canvas);
+        }
+
+        let context_options = JsValue::from_serde(&WebGlOptions {
+            alpha: false,
+            desynchronized: true,
+            antialias: false,
+            depth: false,
+            fail_if_major_performance_caveat: false, // true
+            power_preference: "high-performance",
+            premultiplied_alpha: true,
+            preserve_drawing_buffer: false,
+            stencil: false,
+        })
+        .unwrap();
+
+        let context = canvas
+            .get_context_with_context_options("webgl2", &context_options)
+            .unwrap()
+            .unwrap()
+            .dyn_into::<Gl>()
+            .unwrap();
+
+        #[allow(unused_must_use)]
+        {
+            //context.get_extension("EXT_float_blend"); // blend on 32 bit components, shouldn't be needed but keep here just in case
+            //context.get_extension("EXT_texture_filter_anisotropic"); // find how to use this with wasm :S
+            context.get_extension("EXT_color_buffer_float"); // enable a bunch of types
+            context.get_extension("OES_texture_float_linear"); // enable linear filtering on floating textures
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            log!("Enabling debug extensions.");
+            #[allow(unused_must_use)]
+            {
+                context.get_extension("WEBGL_debug_shaders");
+            }
+        }
+
+        // unused stuff
+        // context.get_extension("OVR_multiview2"); // for VR stuff, keep here for future reference
+        // context.get_extension("EXT_texture_compression_bptc");
+        // context.get_extension("EXT_texture_compression_rgtc");
+        // context.get_extension("WEBGL_compressed_texture_s3tc");
+        // context.get_extension("WEBGL_compressed_texture_s3tc_srgb");
+
+        (context, canvas)
     }
 }

@@ -21,7 +21,7 @@ pub struct Scene1<'a> {
 }
 
 impl <'a> Scene1<'a> {
-    pub fn new(app: &App) -> Self {
+    pub fn new(app: &'a App) -> Self {
         let mut particle_positions = Vec::new();
         let mut rng = fast_rand::FastRand::new(3464357);
 
@@ -41,7 +41,7 @@ impl <'a> Scene1<'a> {
     }
 }
 
-impl <'a> Scene for Scene1<'a> {
+impl <'a> Scene<'a> for Scene1<'a> {
     fn on_frame(&mut self, app: &'a App) {
         /*
         Use infinite inverted depth buffer because of the better precision
