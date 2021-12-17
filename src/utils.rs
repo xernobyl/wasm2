@@ -2,7 +2,6 @@
 Some of the some called "utilities"
 */
 
-#![macro_use]
 #![allow(dead_code)]
 
 type Gl = web_sys::WebGl2RenderingContext;

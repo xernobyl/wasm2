@@ -10,7 +10,7 @@ Maybe render lines (2 verts) to a buffer using
 transform feedback, and reusing it as a strip?
 */
 
-use std::{borrow::Borrow, rc::Rc};
+use std::rc::Rc;
 
 use web_sys::{WebGl2RenderingContext, WebGlBuffer, WebGlVertexArrayObject};
 

@@ -22,7 +22,7 @@ impl Demo {
 impl AppInstance for Demo {
     fn setup(&mut self, app: &App) {
         log!("Initializing scenes...");
-        let scene1 = Box::new(Scene1::new(&app));
+        let scene1 = Box::new(Scene1::new(app));
         self.scenes.push(scene1);
     }
 

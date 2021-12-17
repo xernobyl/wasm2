@@ -41,16 +41,14 @@ impl App {
 
         let width = canvas.client_width() as u32;
         let height = canvas.client_height() as u32;
-        let aspect_ratio: f32;
-
-        if width != 0 && height != 0 {
+        let aspect_ratio: f32 = if width != 0 && height != 0 {
             canvas.set_width(width);
             canvas.set_height(height);
 
-            aspect_ratio = width as f32 / height as f32;
+            width as f32 / height as f32
         } else {
-            aspect_ratio = 1.0;
-        }
+            1.0
+        };
 
         let fullscreen_buffers =
             fullscreen_buffers::ScreenBuffers::init(&context, &(width as i32), &(height as i32))
@@ -102,7 +100,6 @@ impl App {
             .set_onresize(Option::Some(closure.as_ref().unchecked_ref()));
         closure.forget();
 
-        let app_rc = app_rc0.clone();
         let f = Rc::new(RefCell::new(None));
         let g = f.clone();
 
@@ -118,7 +115,7 @@ impl App {
                 );
             }
 
-            let mut app = app_rc.borrow_mut();
+            let mut app = app_rc0.borrow_mut();
             app.delta_time = timestamp - app.current_timestamp;
             app.current_timestamp = timestamp;
 

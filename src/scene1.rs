@@ -6,8 +6,6 @@ use crate::scene::Scene;
 use crate::shaders::Programs;
 use crate::{fast_rand, utils};
 use glam::{Mat4, Vec3};
-use std::borrow::Borrow;
-use std::{cell::RefCell, rc::Rc};
 use web_sys::WebGl2RenderingContext;
 
 type Gl = WebGl2RenderingContext;
@@ -46,12 +44,12 @@ fn iq_palette(
     c: (f32, f32, f32),
     d: (f32, f32, f32),
 ) -> (f32, f32, f32) {
-    const tau: f32 = std::f32::consts::TAU;
+    const TAU: f32 = std::f32::consts::TAU;
 
     (
-        a.0 + b.0 * f32::cos(tau * (c.0 * t + d.0)),
-        a.1 + b.1 * f32::cos(tau * (c.1 * t + d.1)),
-        a.2 + b.2 * f32::cos(tau * (c.2 * t + d.2)),
+        a.0 + b.0 * f32::cos(TAU * (c.0 * t + d.0)),
+        a.1 + b.1 * f32::cos(TAU * (c.1 * t + d.1)),
+        a.2 + b.2 * f32::cos(TAU * (c.2 * t + d.2)),
     )
 }
 
