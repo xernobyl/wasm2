@@ -12,7 +12,8 @@ type Gl = WebGl2RenderingContext;
 
 
 pub trait AppInstance {
-    fn frame(&self, app: &App);
+    fn setup(&mut self, app: &App);
+    fn frame(&mut self, app: &App);
 }
 
 
@@ -35,7 +36,7 @@ pub struct App {
 
 
 impl App {
-    pub fn init(app_instance: Box<dyn AppInstance>) {
+    pub fn init(mut app_instance: Box<dyn AppInstance>) {
         panic::set_hook(Box::new(console_error_panic_hook::hook));
 
         let (context, canvas) = App::create_context();
@@ -81,6 +82,8 @@ impl App {
         log!("setup_shaders()");
         setup_shaders(rc_context, &mut app.programs).expect("Shader error");
 
+        app_instance.as_mut().setup(&app);
+
         let app_rc0 = Rc::new(RefCell::new(app));
 
         let app_rc = app_rc0.clone();
@@ -106,9 +109,7 @@ impl App {
         let f = Rc::new(RefCell::new(None));
         let g = f.clone();
 
-        // setup(&app_rc0.borrow());
-
-        let app_instance_rc = Rc::new(app_instance);
+        let app_instance_rc = Rc::new(RefCell::new(app_instance));
 
         let closure = Closure::wrap(Box::new(move |timestamp| {
             #[allow(unused_must_use)]
@@ -146,7 +147,7 @@ impl App {
                 false
             };
 
-            let app_instance = app_instance_rc.clone();
+            let mut app_instance = app_instance_rc.borrow_mut();
             app_instance.frame(&app);
 
             app.current_frame += 1;

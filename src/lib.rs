@@ -23,6 +23,6 @@ use crate::demo::Demo;
 #[wasm_bindgen(start)]
 pub fn main() -> Result<(), JsValue> {
     let demo = Demo::new();
-    let app = App::init(Box::new(demo));
+    App::init(Box::new(demo));
     Ok(())
 }

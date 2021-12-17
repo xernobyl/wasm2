@@ -12,16 +12,15 @@ use web_sys::WebGl2RenderingContext;
 
 type Gl = WebGl2RenderingContext;
 
-pub struct Scene1<'a> {
-    app: &'a App,
-    line_strip: Line2DStrip<'a>,
-    particles: Particles<'a>,
+pub struct Scene1 {
+    line_strip: Line2DStrip,
+    particles: Particles,
     particle_positions: Vec<f32>,
     rng: FastRand,
 }
 
-impl <'a> Scene1<'a> {
-    pub fn new(app: &'a App) -> Self {
+impl Scene1 {
+    pub fn new(app: &App) -> Self {
         let mut particle_positions = Vec::new();
         let mut rng = fast_rand::FastRand::new(3464357);
 
@@ -34,15 +33,14 @@ impl <'a> Scene1<'a> {
         Self {
             line_strip: Line2DStrip::new(&app.context),
             particles: Particles::new(&app.context),
-            app: app.clone(),
             particle_positions,
             rng,
         }
     }
 }
 
-impl <'a> Scene<'a> for Scene1<'a> {
-    fn on_frame(&mut self, app: &'a App) {
+impl Scene for Scene1 {
+    fn on_frame(&mut self, app: &App) {
         /*
         Use infinite inverted depth buffer because of the better precision
         */
@@ -143,9 +141,9 @@ impl <'a> Scene<'a> for Scene1<'a> {
     }
 }
 
-impl <'a> Drop for Scene1<'a> {
+impl Drop for Scene1 {
     fn drop(&mut self) {
-        let _gl: &Gl = self.app.context.borrow();
+        // let _gl: &Gl = self.app.context.borrow();
         // TODO: destroy stuff
     }
 }
