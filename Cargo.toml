@@ -5,6 +5,8 @@ authors = ["Tiago <1585571+xernobyl@users.noreply.github.com>"]
 edition = "2021"
 description = "A program that runs and shows things on the screen."
 repository = "https://github.com/xernobyl/wasm2"
+license = "CC BY-NC-SA 4.0"
+license-file = "http://creativecommons.org/licenses/by-nc-sa/4.0/"
 
 #[build]
 #target = "wasm32-unknown-unknown"
