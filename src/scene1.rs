@@ -39,6 +39,22 @@ impl Scene1 {
     }
 }
 
+fn iq_palette(
+    t: f32,
+    a: (f32, f32, f32),
+    b: (f32, f32, f32),
+    c: (f32, f32, f32),
+    d: (f32, f32, f32),
+) -> (f32, f32, f32) {
+    const tau: f32 = std::f32::consts::TAU;
+
+    (
+        a.0 + b.0 * f32::cos(tau * (c.0 * t + d.0)),
+        a.1 + b.1 * f32::cos(tau * (c.1 * t + d.1)),
+        a.2 + b.2 * f32::cos(tau * (c.2 * t + d.2)),
+    )
+}
+
 impl Scene for Scene1 {
     fn on_frame(&mut self, app: &App) {
         /*
@@ -50,7 +66,17 @@ impl Scene for Scene1 {
         // log!0"Frame: {}\nTimestamp: {}", self.current_frame, self.current_timestamp);
 
         app.fullscreen_buffers.bind(gl);
-        gl.clear_color(self.rng.urand(), self.rng.urand(), self.rng.urand(), self.rng.urand());
+        let mut rng = fast_rand::FastRand::new(453455);
+
+        let bg_col = iq_palette(
+            app.current_timestamp as f32 / 5000.0,
+            (0.5, 0.5, 0.5),
+            (0.5, 0.5, 0.5),
+            (1.0, 1.0, 0.5),
+            (0.80, 0.90, 0.30),
+        );
+
+        gl.clear_color(bg_col.0, bg_col.1, bg_col.2, 0.0);
         gl.clear(Gl::DEPTH_BUFFER_BIT | Gl::COLOR_BUFFER_BIT);
 
         let camera_position = Vec3::new(
@@ -74,7 +100,7 @@ impl Scene for Scene1 {
         let mut view_projection_array = Vec::new();
 
         for _ in 0..128 {
-            let cube_pos = Vec3::new(5.0 * self.rng.rand(), 5.0 * self.rng.rand(), 5.0 * self.rng.rand());
+            let cube_pos = Vec3::new(5.0 * rng.rand(), 5.0 * rng.rand(), 5.0 * rng.rand());
             let mv = Mat4::from_translation(cube_pos);
 
             // camera aligned cubes... save this for later, probably do it in shader
@@ -109,21 +135,37 @@ impl Scene for Scene1 {
         gl.disable(Gl::DEPTH_TEST);
 
         let mut lines = Vec::new();
+        const N_SEGMENTS: i32 = 37;
 
-        for i in 0..500 {
-            lines.push(f32::sin(
-                i as f32 / 500.0 * std::f32::consts::TAU + app.current_timestamp as f32 / 2000.0,
-            ));
-            lines.push(f32::cos(
-                i as f32 / 500.0 * std::f32::consts::TAU + app.current_timestamp as f32 / 2000.0,
-            ));
-            lines.push(self.rng.urand() * 0.05);
+        for i in 0..N_SEGMENTS {
+            let t = i as f32 / (N_SEGMENTS as f32) * std::f32::consts::TAU
+                - app.current_timestamp as f32 / 4096.0;
+            lines.push(0.75 * f32::sin(t));
+            lines.push(0.75 * f32::cos(t));
+            lines.push(
+                rng.urand() * 0.25
+                    + 0.25
+                        * (0.75 + 0.25 * f32::sin(i as f32 + app.current_timestamp as f32 / 500.0)),
+            );
         }
 
-        self.line_strip.update_points(gl, lines.as_slice());
+        // reconnect to first point, and tail data stuff
+        lines.push(lines[0]);
+        lines.push(lines[1]);
+        lines.push(lines[2]);
 
+        lines.push(lines[3]);
+        lines.push(lines[4]);
+        lines.push(lines[5]);
+
+        // dummy data
+        lines.push(lines[6]);
+        lines.push(lines[7]);
+        lines.push(lines[8]);
+
+        self.line_strip.update_points(gl, lines.as_slice());
         gl.use_program(app.programs[Programs::Line2DStrip as usize].as_ref());
-        self.line_strip.draw(gl, 500 - 3);
+        self.line_strip.draw(gl, lines.len() as i32 / 3 - 3);
 
         // screen pass
         gl.bind_framebuffer(Gl::FRAMEBUFFER, None);
