@@ -11,6 +11,8 @@ layout(location = 1) in vec3 line_a;
 layout(location = 2) in vec3 line_b;
 layout(location = 3) in vec3 line_b_;
 
+out float width;
+
 void main() {
   /*
   const vec4 vertices = vec4(0.0, 1.0, -0.5, 0.5);
@@ -45,14 +47,14 @@ void main() {
     vec2 da = normalize(line_a.xy - line_a_.xy);
     vec2 perp = 0.5 * da + 0.5 * db;
     perp = vec2(-perp.y, perp.x) * (gl_VertexID == 0 ? -0.5 : 0.5) * line_a.z;
-
+    width = length(perp);
     vertex = line_a.xy + perp;
   }
   else {
     vec2 dc = normalize(line_b_.xy - line_b.xy);
     vec2 perp = 0.5 * db + 0.5 * dc;
     perp = vec2(-perp.y, perp.x) * (gl_VertexID == 1 ? -0.5 : 0.5) * line_b.z;
-
+    width = length(perp);
     vertex = line_b.xy + perp;
   }
 
