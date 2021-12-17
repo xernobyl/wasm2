@@ -10,12 +10,10 @@ use web_sys::WebGl2RenderingContext;
 
 type Gl = WebGl2RenderingContext;
 
-
 pub trait AppInstance {
     fn setup(&mut self, app: &App);
     fn frame(&mut self, app: &App);
 }
-
 
 pub struct App {
     pub context: Rc<Gl>,
@@ -33,7 +31,6 @@ pub struct App {
     new_width: u32, // set this whenever there are resizes
     new_height: u32,
 }
-
 
 impl App {
     pub fn init(mut app_instance: Box<dyn AppInstance>) {

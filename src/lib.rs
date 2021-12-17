@@ -11,14 +11,13 @@ mod fast_rand;
 mod fullscreen_buffers;
 mod half_cube;
 mod line_2d_strip;
+mod particles;
 mod scene;
 mod scene1;
 mod shaders;
-mod particles;
 
 use crate::app::App;
 use crate::demo::Demo;
-
 
 #[wasm_bindgen(start)]
 pub fn main() -> Result<(), JsValue> {
