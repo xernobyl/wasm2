@@ -5,8 +5,9 @@ use crate::particles::Particles;
 use crate::scene::Scene;
 use crate::shaders::Programs;
 use crate::{fast_rand, utils};
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec3, Vec4};
 use web_sys::WebGl2RenderingContext;
+use std::num;
 
 type Gl = WebGl2RenderingContext;
 
@@ -35,6 +36,32 @@ impl Scene1 {
             rng,
         }
     }
+}
+
+/// Creates a right-handed infininte perspective projection matrix with [-1,1] depth range.
+fn perspective_infinite(fov_y_radians: f32, aspect_ratio: f32, z_near: f32) -> Mat4 {
+    let f = 1.0 / (0.5 * fov_y_radians).tan();
+    let a = f / aspect_ratio;
+    let b = -2.0 * z_near;
+    Mat4::from_cols(
+        Vec4::new(a, 0.0, 0.0, 0.0),
+        Vec4::new(0.0, f, 0.0, 0.0),
+        Vec4::new(0.0, 0.0, -1.0, -1.0),
+        Vec4::new(0.0, 0.0, b, 0.0),
+    )
+}
+
+/// Creates a right-handed infininte inverted perspective projection matrix with [1, -1] depth range.
+fn perspective_infinite_inverted(fov_y_radians: f32, aspect_ratio: f32, z_near: f32) -> Mat4{
+    let f = 1.0 / (0.5 * fov_y_radians).tan();
+    let a = f / aspect_ratio;
+    let b = -2.0 * z_near;
+    Mat4::from_cols(
+        Vec4::new(a, 0.0, 0.0, 0.0),
+        Vec4::new(0.0, f, 0.0, 0.0),
+        Vec4::new(0.0, 0.0, 1.0, -1.0),
+        Vec4::new(0.0, 0.0, -b, 0.0),
+    )
 }
 
 fn iq_palette(
@@ -82,7 +109,7 @@ impl Scene for Scene1 {
             10.0 * f32::sin(app.current_timestamp as f32 / 2000.0),
             15.0 * f32::sin(app.current_timestamp as f32 / 2000.0),
         );
-        let projection = Mat4::perspective_infinite_reverse_rh(
+        let projection = self::perspective_infinite_inverted(
             std::f32::consts::PI / 2.0,
             app.aspect_ratio,
             0.1,

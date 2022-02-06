@@ -36,129 +36,6 @@ impl App {
     pub fn init(mut app_instance: Box<dyn AppInstance>) {
         panic::set_hook(Box::new(console_error_panic_hook::hook));
 
-        let (context, canvas) = App::create_context();
-        log!("Created context...");
-
-        let width = canvas.client_width() as u32;
-        let height = canvas.client_height() as u32;
-        let aspect_ratio: f32 = if width != 0 && height != 0 {
-            canvas.set_width(width);
-            canvas.set_height(height);
-
-            width as f32 / height as f32
-        } else {
-            1.0
-        };
-
-        let fullscreen_buffers =
-            fullscreen_buffers::ScreenBuffers::init(&context, &(width as i32), &(height as i32))
-                .unwrap();
-        let screen = web_sys::window().unwrap().screen().unwrap();
-
-        let rc_context = Rc::new(context);
-
-        let mut app = App {
-            context: rc_context.clone(),
-            cube: half_cube::HalfCube::new(rc_context.clone()),
-            programs: Default::default(),
-            current_frame: 0,
-            current_timestamp: 0.0,
-            delta_time: 0.0,
-            aspect_ratio,
-            width: 0,
-            height: 0,
-            new_width: width,
-            new_height: height,
-            max_width: screen.width().ok().unwrap() as u32,
-            max_height: screen.height().ok().unwrap() as u32,
-            fullscreen_buffers,
-        };
-
-        log!("setup_shaders()");
-        setup_shaders(rc_context, &mut app.programs).expect("Shader error");
-
-        app_instance.as_mut().setup(&app);
-
-        let app_rc0 = Rc::new(RefCell::new(app));
-
-        let app_rc = app_rc0.clone();
-        let closure = Closure::wrap(Box::new(move || {
-            let width = canvas.client_width() as u32;
-            let height = canvas.client_height() as u32;
-
-            if width != 0 && height != 0 && canvas.width() != width && canvas.height() != height {
-                canvas.set_width(width);
-                canvas.set_height(height);
-                let mut app = app_rc.borrow_mut();
-                app.new_width = width;
-                app.new_height = height;
-            }
-        }) as Box<dyn FnMut()>);
-
-        web_sys::window()
-            .unwrap()
-            .set_onresize(Option::Some(closure.as_ref().unchecked_ref()));
-        closure.forget();
-
-        let f = Rc::new(RefCell::new(None));
-        let g = f.clone();
-
-        let app_instance_rc = Rc::new(RefCell::new(app_instance));
-
-        let closure = Closure::wrap(Box::new(move |timestamp| {
-            #[allow(unused_must_use)]
-            {
-                web_sys::window().unwrap().request_animation_frame(
-                    (f.borrow().as_ref().unwrap() as &Closure<dyn FnMut(f64)>)
-                        .as_ref()
-                        .unchecked_ref(),
-                );
-            }
-
-            let mut app = app_rc0.borrow_mut();
-            app.delta_time = timestamp - app.current_timestamp;
-            app.current_timestamp = timestamp;
-
-            let _resized = if app.new_width > 0 {
-                if app.max_height < app.new_height {
-                    app.max_height = app.new_height;
-                }
-
-                if app.max_width < app.new_width {
-                    app.max_width = app.new_width;
-                }
-
-                app.width = app.new_width;
-                app.height = app.new_height;
-                app.aspect_ratio = app.width as f32 / app.height as f32;
-                app.new_width = 0;
-
-                log!("Resize: {} {}, {}", app.width, app.height, app.aspect_ratio);
-                log!("Max size: {} {}", app.max_width, app.max_height);
-
-                true
-            } else {
-                false
-            };
-
-            let mut app_instance = app_instance_rc.borrow_mut();
-            app_instance.frame(&app);
-
-            app.current_frame += 1;
-        }) as Box<dyn FnMut(f64)>);
-
-        *g.borrow_mut() = Some(closure);
-
-        log!("Starting render loop...");
-        #[allow(unused_must_use)]
-        {
-            web_sys::window()
-                .unwrap()
-                .request_animation_frame(g.borrow().as_ref().unwrap().as_ref().unchecked_ref());
-        }
-    }
-
-    fn create_context() -> (Gl, web_sys::HtmlCanvasElement) {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
         struct WebGlOptions {
@@ -234,6 +111,144 @@ impl App {
         // context.get_extension("WEBGL_compressed_texture_s3tc");
         // context.get_extension("WEBGL_compressed_texture_s3tc_srgb");
 
-        (context, canvas)
+        log!("Created context...");
+
+        let width = canvas.client_width() as u32;
+        let height = canvas.client_height() as u32;
+        let aspect_ratio: f32 = if width != 0 && height != 0 {
+            canvas.set_width(width);
+            canvas.set_height(height);
+
+            width as f32 / height as f32
+        } else {
+            1.0
+        };
+
+        let fullscreen_buffers =
+            fullscreen_buffers::ScreenBuffers::init(&context, &(width as i32), &(height as i32))
+                .unwrap();
+        let screen = web_sys::window().unwrap().screen().unwrap();
+
+        let rc_context = Rc::new(context);
+
+        let mut app = App {
+            context: rc_context.clone(),
+            cube: half_cube::HalfCube::new(rc_context.clone()),
+            programs: Default::default(),
+            current_frame: 0,
+            current_timestamp: 0.0,
+            delta_time: 0.0,
+            aspect_ratio,
+            width: 0,
+            height: 0,
+            new_width: width,
+            new_height: height,
+            max_width: screen.width().ok().unwrap() as u32,
+            max_height: screen.height().ok().unwrap() as u32,
+            fullscreen_buffers,
+        };
+
+        log!("setup_shaders()");
+        setup_shaders(rc_context, &mut app.programs).expect("Shader error");
+
+        app_instance.as_mut().setup(&app);
+
+        let app_rc0 = Rc::new(RefCell::new(app));
+
+        let app_rc = app_rc0.clone();
+        let closure = Closure::wrap(Box::new(move || {
+            let width = canvas.client_width() as u32;
+            let height = canvas.client_height() as u32;
+
+            if width != 0 && height != 0 && canvas.width() != width && canvas.height() != height {
+                canvas.set_width(width);
+                canvas.set_height(height);
+                let mut app = app_rc.borrow_mut();
+                app.new_width = width;
+                app.new_height = height;
+            }
+        }) as Box<dyn FnMut()>);
+
+        web_sys::window()
+            .unwrap()
+            .set_onresize(Option::Some(closure.as_ref().unchecked_ref()));
+        closure.forget();
+
+        let closure = Closure::wrap(Box::new(move || {
+            log!("KEY DOWN!");
+        }) as Box<dyn FnMut()>);
+
+        #[allow(unused_must_use)]
+        {
+            document.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+        }
+        closure.forget();
+
+        let closure = Closure::wrap(Box::new(move || {
+            log!("KEY UP!");
+        }) as Box<dyn FnMut()>);
+
+        #[allow(unused_must_use)]
+        {
+            document.add_event_listener_with_callback("keyup", closure.as_ref().unchecked_ref());
+        }
+        closure.forget();
+
+        let f = Rc::new(RefCell::new(None));
+        let g = f.clone();
+
+        let app_instance_rc = Rc::new(RefCell::new(app_instance));
+
+        let closure = Closure::wrap(Box::new(move |timestamp| {
+            #[allow(unused_must_use)]
+            {
+                web_sys::window().unwrap().request_animation_frame(
+                    (f.borrow().as_ref().unwrap() as &Closure<dyn FnMut(f64)>)
+                        .as_ref()
+                        .unchecked_ref(),
+                );
+            }
+
+            let mut app = app_rc0.borrow_mut();
+            app.delta_time = timestamp - app.current_timestamp;
+            app.current_timestamp = timestamp;
+
+            let _resized = if app.new_width > 0 {
+                if app.max_height < app.new_height {
+                    app.max_height = app.new_height;
+                }
+
+                if app.max_width < app.new_width {
+                    app.max_width = app.new_width;
+                }
+
+                app.width = app.new_width;
+                app.height = app.new_height;
+                app.aspect_ratio = app.width as f32 / app.height as f32;
+                app.new_width = 0;
+
+                log!("Resize: {} {}, {}", app.width, app.height, app.aspect_ratio);
+                log!("Max size: {} {}", app.max_width, app.max_height);
+
+                true
+            } else {
+                false
+            };
+
+            let mut app_instance = app_instance_rc.borrow_mut();
+            app_instance.frame(&app);
+
+            app.current_frame += 1;
+        }) as Box<dyn FnMut(f64)>);
+
+        *g.borrow_mut() = Some(closure);
+
+        log!("Starting render loop...");
+        #[allow(unused_must_use)]
+        {
+            web_sys::window()
+                .unwrap()
+                .request_animation_frame(g.borrow().as_ref().unwrap().as_ref().unchecked_ref());
+        }
     }
 }
