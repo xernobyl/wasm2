@@ -7,7 +7,6 @@ use crate::shaders::Programs;
 use crate::{fast_rand, utils};
 use glam::{Mat4, Vec3, Vec4};
 use web_sys::WebGl2RenderingContext;
-use std::num;
 
 type Gl = WebGl2RenderingContext;
 
@@ -112,7 +111,7 @@ impl Scene for Scene1 {
         let projection = self::perspective_infinite_inverted(
             std::f32::consts::PI / 2.0,
             app.aspect_ratio,
-            0.1,
+            1.0,
         );
         let view = Mat4::look_at_rh(
             camera_position,

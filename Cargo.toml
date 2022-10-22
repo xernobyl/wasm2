@@ -18,6 +18,7 @@ console_error_panic_hook = "*"
 js-sys = "*"
 glam = "*"
 serde = { version = "*", features = ["derive"] }
+serde-wasm-bindgen = "*"
 wasm-bindgen = { version = "*", features = ["serde-serialize"] }
 
 [dependencies.web-sys]

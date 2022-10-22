@@ -3,7 +3,6 @@ Generate a tesselated plane
 */
 
 use std::rc::Rc;
-
 use web_sys::{WebGl2RenderingContext, WebGlBuffer, WebGlVertexArrayObject};
 
 type Gl = WebGl2RenderingContext;
@@ -20,10 +19,12 @@ pub struct Plane {
 }
 
 impl Plane {
-    pub fn new(gl: Rc<Gl>, size) -> Self {
-        const INDEX_BUFFER: [u8; 8] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 1];
+    pub fn new(gl: Rc<Gl>) -> Self {
+        const INDEX_BUFFER: [u8; 8] = [4, 2, 1, 0, 3, 6, 7, 8, 5];
         const VERTEX_BUFFER: [(i8, i8); 9] = [
-            (0, 0), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1), (1, 0), (1, 1)
+            (-1, 1), (0, 1), (1, 1),
+            (-1, 0), (0, 0), (1, 0),
+            (-1, -1), (0, -1), (1, -1),
         ];
 
         let vao = gl.create_vertex_array().expect("Error creating VAO.");

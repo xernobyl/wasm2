@@ -67,7 +67,7 @@ impl App {
             document.body().unwrap().append_child(&canvas);
         }
 
-        let context_options = JsValue::from_serde(&WebGlOptions {
+        let context_options = serde_wasm_bindgen::to_value(&WebGlOptions {
             alpha: false,
             desynchronized: true,
             antialias: false,
