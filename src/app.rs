@@ -243,12 +243,52 @@ impl App {
 
         *g.borrow_mut() = Some(closure);
 
+        // HACK xr() can be undefined and wasm-bindgen doesn't agree
+        let vr_supported = js_sys::eval("navigator.xr !== undefined").unwrap().as_bool().unwrap();
+        log!("WebXr support: {}", vr_supported);
+
+        if vr_supported {
+            web_sys::window().unwrap().alert_with_message("There should be a button around there ↘");
+            Self::add_vr_button();
+
+            /*let navigator = web_sys::window().unwrap().navigator();
+            let xr = navigator.xr();
+            let vr_supported = xr.is_session_supported(web_sys::XrSessionMode::ImmersiveVr);
+            let vr_supported = wasm_bindgen_futures::JsFuture::from(vr_supported);
+            //let vr_supported: js_sys::Boolean = vr_supported.into();
+            log!("vr_supported == {}", vr_supported.into());*/
+        } else {
+            web_sys::window().unwrap().alert_with_message("No WebXR for you!");
+        }
+
         log!("Starting render loop...");
         #[allow(unused_must_use)]
         {
             web_sys::window()
                 .unwrap()
                 .request_animation_frame(g.borrow().as_ref().unwrap().as_ref().unchecked_ref());
+        }
+    }
+
+    fn add_vr_button() {
+        let document = web_sys::window().unwrap().document().unwrap();
+        let button = document
+            .create_element("div")
+            .unwrap()
+            .dyn_into::<web_sys::HtmlDivElement>()
+            .unwrap();
+
+        #[allow(unused_must_use)] {
+            button.set_inner_text("🤓");
+            button.style().set_property("position", "fixed");
+            button.style().set_property("right", "0");
+            button.style().set_property("bottom", "0");
+            button.style().set_property("font-size", "10em");
+            button.style().set_property("cursor", "pointer");
+            button.style().set_property("user-select", "none");
+            button.style().set_property("transform", "rotate(45deg)");
+            button.style().set_property("text-shadow", "#f00 -0.05em 0.05em 0.1em, #0ff 0.05em -0.05em 0.1em");
+            document.body().unwrap().append_child(&button);
         }
     }
 }

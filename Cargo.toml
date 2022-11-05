@@ -13,6 +13,12 @@ license = "CC BY-NC-SA 4.0"
 [lib]
 crate-type = ["cdylib"]
 
+[build]
+rustflags = ["--cfg=web_sys_unstable_apis"]
+
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg=web_sys_unstable_apis"]
+
 [dependencies]
 console_error_panic_hook = "*"
 js-sys = "*"
@@ -20,6 +26,7 @@ glam = "*"
 serde = { version = "*", features = ["derive"] }
 serde-wasm-bindgen = "*"
 wasm-bindgen = { version = "*", features = ["serde-serialize"] }
+wasm-bindgen-futures = "*"
 
 [dependencies.web-sys]
 version = "*"
@@ -30,18 +37,22 @@ features = [
 	'Element',
 	'FocusEvent',
 	'HtmlCanvasElement',
+	'HtmlDivElement',
 	'HtmlElement',
+	'Navigator',
 	'Node',
 	'Performance',
-  'Screen',
+	'Screen',
 	'UiEvent',
-  'WebGl2RenderingContext',
+	'WebGl2RenderingContext',
 	'WebGlBuffer',
 	'WebGlFramebuffer',
 	'WebGlProgram',
 	'WebGlShader',
 	'WebGlTexture',
 	'WebGlUniformLocation',
-  'WebGlVertexArrayObject',
+	'WebGlVertexArrayObject',
 	'Window',
+	'XrSessionMode',
+	'XrSystem',
 ]
