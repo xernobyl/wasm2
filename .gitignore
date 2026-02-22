@@ -1,4 +1,4 @@
 target
 pkg
 .vscode
-Cargo.lock
+.cursor

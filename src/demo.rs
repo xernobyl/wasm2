@@ -1,20 +1,20 @@
 use crate::app::{App, AppInstance};
 use crate::scene::Scene;
 use crate::scene1::Scene1;
-use web_sys::WebGl2RenderingContext;
+use wasm_bindgen::JsCast;
+use web_sys::CanvasRenderingContext2d;
+use wgpu::RenderPass;
 
 pub struct Demo {
     scenes: Vec<Box<dyn Scene>>,
     current_scene: usize,
 }
 
-type Gl = WebGl2RenderingContext;
-
 impl Demo {
     pub fn new() -> Self {
         Demo {
             scenes: Vec::new(),
-            current_scene: 0,   //usize::MAX,
+            current_scene: 0,
         }
     }
 }
@@ -26,13 +26,28 @@ impl AppInstance for Demo {
         self.scenes.push(scene1);
     }
 
-    fn frame(&mut self, app: &App) {
+    fn frame(
+        &mut self,
+        app: &mut App,
+        view: &crate::view::ViewState,
+        pass: Option<&mut RenderPass<'_>>,
+        is_gbuffer: bool,
+    ) {
         if self.current_scene >= self.scenes.len() {
-            app.context.bind_framebuffer(Gl::FRAMEBUFFER, None);
-            app.context.clear_color(0.0, 0.0, 1.0, 1.0);
-            app.context.clear(Gl::COLOR_BUFFER_BIT);
+            if pass.is_none() {
+                if let Some(ctx) = app
+                    .canvas
+                    .get_context("2d")
+                    .ok()
+                    .flatten()
+                    .and_then(|c| c.dyn_into::<CanvasRenderingContext2d>().ok())
+                {
+                    let _ = ctx.set_fill_style_str("#0000ff");
+                    let _ = ctx.fill_rect(0.0, 0.0, app.width as f64, app.height as f64);
+                }
+            }
         } else {
-            self.scenes[self.current_scene].on_frame(app);
+            self.scenes[self.current_scene].on_frame(app, view, pass, is_gbuffer);
         }
     }
 }

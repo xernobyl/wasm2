@@ -22,6 +22,8 @@ impl FastRand {
         }
     }
 
+    /// Kept for API / future use; do not remove.
+    #[allow(dead_code)]
     pub fn urand(&mut self) -> f32 {
         unsafe {
             self.seed.i *= Wrapping(16807i32);

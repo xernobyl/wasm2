@@ -1,0 +1,9 @@
+# Required for web-sys WebXR features (XrSystem, XrSessionMode)
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg=web_sys_unstable_apis"]
+
+[alias]
+# Lint for the actual build target (WASM)
+lint = "clippy --target wasm32-unknown-unknown"
+# Check formatting without writing
+fmt-check = "fmt -- --check"

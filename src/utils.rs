@@ -1,10 +1,6 @@
-/*
-Some of the some called "utilities"
-*/
+//! Shared utilities: logging, buffer views, Halton sequence.
 
 #![allow(dead_code)]
-
-type Gl = web_sys::WebGl2RenderingContext;
 
 // A macro to provide `println!(..)`-style syntax for `console.log` logging.
 macro_rules! log {
@@ -20,17 +16,44 @@ macro_rules! log_error {
   }
 }
 
+/// Reinterprets a slice of `T` as bytes. Use only when `T` is `repr(C)` and the
+/// buffer is used as raw bytes (e.g. for WebGL buffer upload).
+#[inline]
 pub fn as_u8_slice<T>(v: &[T]) -> &[u8] {
     unsafe {
-        std::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * std::mem::size_of::<T>())
+        std::slice::from_raw_parts(
+            v.as_ptr().cast::<u8>(),
+            v.len().saturating_mul(std::mem::size_of::<T>()),
+        )
     }
 }
 
+/// Reinterprets a slice of `T` as f32s. Caller must ensure alignment and that
+/// `size_mult` matches the logical f32 count per element (e.g. 16 for Mat4).
+#[inline]
 pub fn as_f32_slice<T>(v: &[T], size_mult: usize) -> &[f32] {
-    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const f32, v.len() * size_mult) }
+    let len = v.len().saturating_mul(size_mult);
+    unsafe { std::slice::from_raw_parts(v.as_ptr().cast::<f32>(), len) }
 }
 
-pub fn fullscreen_quad(gl: &Gl) {
-    gl.bind_vertex_array(None);
-    gl.draw_arrays(Gl::TRIANGLES, 0, 3);
+/// Halton sequence 2D; values in [-0.5, 0.5]. Returns flat array [x0,y0, x1,y1, ...].
+pub fn halton_sequence_2d(count: usize, base1: u32, base2: u32) -> Vec<f32> {
+    fn halton(index: u32, base: u32) -> f32 {
+        let mut result = 0.0f32;
+        let mut f = 1.0f32 / (base as f32);
+        let mut i = index;
+        while i > 0 {
+            result += f * ((i % base) as f32);
+            i /= base;
+            f /= base as f32;
+        }
+        result - 0.5
+    }
+    let mut points = Vec::with_capacity(count * 2);
+    for i in 1..=count {
+        let i = i as u32;
+        points.push(halton(i, base1));
+        points.push(halton(i, base2));
+    }
+    points
 }

@@ -1,36 +1,70 @@
 [package]
 name = "wasm2"
 version = "0.0.0"
-authors = ["Tiago <1585571+xernobyl@users.noreply.github.com>"]
 edition = "2021"
+rust-version = "1.85"
 description = "A program that runs and shows things on the screen."
 repository = "https://github.com/xernobyl/wasm2"
 license = "CC BY-NC-SA 4.0"
 
-#[build]
-#target = "wasm32-unknown-unknown"
+# Release: smaller WASM and faster runtime (use for wasm-pack / deploy)
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
 
 [lib]
 crate-type = ["cdylib"]
 
-[build]
-rustflags = ["--cfg=web_sys_unstable_apis"]
+# --- Safety & correctness (rustc) ---
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+unused_imports = "warn"
+unused_crate_dependencies = "warn"
 
-[target.wasm32-unknown-unknown]
-rustflags = ["--cfg=web_sys_unstable_apis"]
+# --- Safety & performance (Clippy) ---
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+# Safety: require explicit justification for unsafe
+undocumented_unsafe_blocks = "warn"
+# Performance: avoid unnecessary work
+redundant_clone = "warn"
+unnecessary_lazy_evaluations = "warn"
+needless_borrow = "warn"
+needless_question_mark = "warn"
+single_char_add_str = "warn"
+# Correctness
+expect_fun_call = "warn"
+option_if_let_else = "warn"
+# Allow where noisy or not applicable
+result_unit_err = "allow"
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+missing_safety_doc = "allow"
+must_use_candidate = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
 
 [dependencies]
-console_error_panic_hook = "*"
-js-sys = "*"
-glam = "*"
-serde = { version = "*", features = ["derive"] }
-serde-wasm-bindgen = "*"
-wasm-bindgen = { version = "*", features = ["serde-serialize"] }
-wasm-bindgen-futures = "*"
+bytemuck = { version = "1.22", features = ["derive"] }
+console_error_panic_hook = "0.1.7"
+js-sys = "=0.3.77"
+glam = "0.32"
+serde = { version = "1.0", features = ["derive"] }
+serde-wasm-bindgen = "0.6.5"
+wasm-bindgen = { version = "=0.2.100", features = ["serde-serialize"] }
+wasm-bindgen-futures = "=0.4.43"
+wgpu = "28"
 
 [dependencies.web-sys]
-version = "*"
+version = "=0.3.77"
 features = [
+	'CanvasRenderingContext2d',
 	'console',
 	'CssStyleDeclaration',
 	'Document',
@@ -39,20 +73,24 @@ features = [
 	'HtmlCanvasElement',
 	'HtmlDivElement',
 	'HtmlElement',
+	'KeyboardEvent',
 	'Navigator',
 	'Node',
 	'Performance',
 	'Screen',
 	'UiEvent',
-	'WebGl2RenderingContext',
-	'WebGlBuffer',
-	'WebGlFramebuffer',
-	'WebGlProgram',
-	'WebGlShader',
-	'WebGlTexture',
-	'WebGlUniformLocation',
-	'WebGlVertexArrayObject',
 	'Window',
+	'XrEye',
+	'XrFrame',
+	'XrPose',
+	'XrReferenceSpace',
+	'XrReferenceSpaceType',
+	'XrRenderStateInit',
+	'XrRigidTransform',
+	'XrSession',
+	'XrSessionInit',
 	'XrSessionMode',
 	'XrSystem',
+	'XrView',
+	'XrViewerPose',
 ]
