@@ -1,4 +1,5 @@
-// Kawase-style 4-tap blur (single pass, half-res to half-res).
+// 5-tap weighted downsample for bloom mip chain.
+// Center 50%, four corners 12.5% each.
 
 struct VertexOutput {
     @builtin(position) clip: vec4<f32>,
@@ -13,20 +14,22 @@ fn vs(@location(0) pos: vec2<f32>) -> VertexOutput {
     return out;
 }
 
-@group(0) @binding(0) var bloom_tex: texture_2d<f32>;
+@group(0) @binding(0) var color_tex: texture_2d<f32>;
 @group(0) @binding(1) var samp: sampler;
+
+const RADIUS: f32 = 1.0;
 
 @fragment
 fn fs(vin: VertexOutput) -> @location(0) vec4<f32> {
-    let dims = vec2<f32>(textureDimensions(bloom_tex));
-    let one = 1.0 / dims;
+    let dims = vec2<f32>(textureDimensions(color_tex));
+    let texel_size = 1.0 / dims;
     let uv = vin.uv;
-    let o = 1.0 * one;
-    let c = textureSample(bloom_tex, samp, uv);
-    let t = textureSample(bloom_tex, samp, uv + vec2<f32>(0.0, o.y));
-    let b = textureSample(bloom_tex, samp, uv - vec2<f32>(0.0, o.y));
-    let l = textureSample(bloom_tex, samp, uv - vec2<f32>(o.x, 0.0));
-    let r = textureSample(bloom_tex, samp, uv + vec2<f32>(o.x, 0.0));
-    let sum = (c + t + b + l + r) * 0.2;
-    return vec4<f32>(sum.rgb, 1.0);
+
+    let col = textureSample(color_tex, samp, uv).rgb * 0.5
+            + textureSample(color_tex, samp, uv - RADIUS * texel_size).rgb * 0.125
+            + textureSample(color_tex, samp, uv + RADIUS * texel_size).rgb * 0.125
+            + textureSample(color_tex, samp, uv + RADIUS * vec2<f32>(texel_size.x, -texel_size.y)).rgb * 0.125
+            + textureSample(color_tex, samp, uv - RADIUS * vec2<f32>(texel_size.x, -texel_size.y)).rgb * 0.125;
+
+    return vec4<f32>(col, 1.0);
 }

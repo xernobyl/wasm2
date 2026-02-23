@@ -74,6 +74,7 @@ features = [
 	'HtmlDivElement',
 	'HtmlElement',
 	'KeyboardEvent',
+	'MouseEvent',
 	'Navigator',
 	'Node',
 	'Performance',

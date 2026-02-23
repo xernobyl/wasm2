@@ -393,7 +393,7 @@ fn fs(vin: VertexOutput) -> FragmentOutput {
     let zoom = 1.0 / thf;
     halfPixelScale = thf * u.resolution.z;
 
-    let uv = vin.clip.xy * 2.0 - u.resolution.xy;
+    let uv = vec2<f32>(vin.clip.x * 2.0 - u.resolution.x, u.resolution.y - vin.clip.y * 2.0);
     let uv_scaled = uv * u.resolution.z;
 
     let cx = u.inverse_view[0].xyz;

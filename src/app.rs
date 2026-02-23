@@ -37,6 +37,9 @@ const FRAME_BUFFER_SCALE: f32 = 1.0;
 
 pub trait AppInstance {
     fn setup(&mut self, app: &App);
+    fn descriptor(&self) -> &crate::scene::SceneDescriptor;
+    /// Called once per frame before the engine reads the descriptor.
+    fn update(&mut self, input: &crate::scene::FrameInput);
     /// Called once per view (once for mono, twice for stereo left/right).
     /// When `pass` is `Some`, WebGPU is active: warehouse is already drawn; the implementor may record more draws (e.g. cubes) into the same pass.
     /// When `is_gbuffer` is true, the pass is the G-buffer pass (2 color + depth); use [HalfCube::draw_instanced_gbuffer].
@@ -132,6 +135,9 @@ impl App {
         let pending_resize = Rc::new(RefCell::new(None::<(u32, u32)>));
         let pending_resize_for_resize = pending_resize.clone();
         let pending_stereo_toggle = Rc::new(RefCell::new(false));
+        let mouse_delta = Rc::new(RefCell::new((0.0f32, 0.0f32)));
+        let keys_held = Rc::new(RefCell::new(0u32));
+
         let closure = Closure::wrap(Box::new(move || {
             let width = canvas_rc_for_resize.client_width() as u32;
             let height = canvas_rc_for_resize.client_height() as u32;
@@ -146,23 +152,78 @@ impl App {
             .set_onresize(Option::Some(closure.as_ref().unchecked_ref()));
         closure.forget();
 
-        let closure = Closure::wrap(Box::new(move || {
-            log!("KEY DOWN!");
-        }) as Box<dyn FnMut()>);
-        #[allow(unused_must_use)]
+        // Pointer lock on canvas click.
         {
-            document.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+            let canvas_for_click = canvas_rc.clone();
+            let closure = Closure::wrap(Box::new(move || {
+                canvas_for_click.request_pointer_lock();
+            }) as Box<dyn FnMut()>);
+            #[allow(unused_must_use)]
+            {
+                canvas_rc.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+            }
+            closure.forget();
         }
-        closure.forget();
 
-        let closure = Closure::wrap(Box::new(move || {
-            log!("KEY UP!");
-        }) as Box<dyn FnMut()>);
-        #[allow(unused_must_use)]
+        // Mouse move: accumulate deltas only while pointer is locked.
         {
-            document.add_event_listener_with_callback("keyup", closure.as_ref().unchecked_ref());
+            let mouse_delta_for_move = mouse_delta.clone();
+            let document_for_mouse = document.clone();
+            let closure = Closure::wrap(Box::new(move |e: web_sys::MouseEvent| {
+                if document_for_mouse.pointer_lock_element().is_some() {
+                    let mut d = mouse_delta_for_move.borrow_mut();
+                    d.0 += e.movement_x() as f32;
+                    d.1 += e.movement_y() as f32;
+                }
+            }) as Box<dyn FnMut(web_sys::MouseEvent)>);
+            #[allow(unused_must_use)]
+            {
+                document.add_event_listener_with_callback("mousemove", closure.as_ref().unchecked_ref());
+            }
+            closure.forget();
         }
-        closure.forget();
+
+        // Keyboard: track held keys as a bitfield.
+        {
+            use crate::scene::FrameInput;
+            fn key_mask(code: &str) -> u32 {
+                match code {
+                    "KeyW" => FrameInput::KEY_W,
+                    "KeyA" => FrameInput::KEY_A,
+                    "KeyS" => FrameInput::KEY_S,
+                    "KeyD" => FrameInput::KEY_D,
+                    "Space" => FrameInput::KEY_SPACE,
+                    "ShiftLeft" | "ShiftRight" => FrameInput::KEY_SHIFT,
+                    _ => 0,
+                }
+            }
+
+            let keys_for_down = keys_held.clone();
+            let closure = Closure::wrap(Box::new(move |e: web_sys::KeyboardEvent| {
+                let mask = key_mask(&e.code());
+                if mask != 0 {
+                    *keys_for_down.borrow_mut() |= mask;
+                }
+            }) as Box<dyn FnMut(web_sys::KeyboardEvent)>);
+            #[allow(unused_must_use)]
+            {
+                document.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+            }
+            closure.forget();
+
+            let keys_for_up = keys_held.clone();
+            let closure = Closure::wrap(Box::new(move |e: web_sys::KeyboardEvent| {
+                let mask = key_mask(&e.code());
+                if mask != 0 {
+                    *keys_for_up.borrow_mut() &= !mask;
+                }
+            }) as Box<dyn FnMut(web_sys::KeyboardEvent)>);
+            #[allow(unused_must_use)]
+            {
+                document.add_event_listener_with_callback("keyup", closure.as_ref().unchecked_ref());
+            }
+            closure.forget();
+        }
 
         let f = Rc::new(RefCell::new(None));
         let g = f.clone();
@@ -170,6 +231,8 @@ impl App {
         let app_rc_for_loop = app_rc0.clone();
         let pending_resize_for_loop = pending_resize.clone();
         let pending_stereo_toggle_for_loop = pending_stereo_toggle.clone();
+        let mouse_delta_for_loop = mouse_delta.clone();
+        let keys_held_for_loop = keys_held.clone();
         let pending_init = Rc::new(RefCell::new(None::<(HalfCube, GpuContext)>));
         let pending_init_for_loop = pending_init.clone();
 
@@ -237,24 +300,34 @@ impl App {
             };
             let _ = resized;
 
+            let mut app_instance = app_instance_rc.borrow_mut();
+            let (mdx, mdy) = mouse_delta_for_loop.replace((0.0, 0.0));
+            let frame_input = crate::scene::FrameInput {
+                timestamp: app.current_timestamp,
+                delta_time: app.delta_time,
+                mouse_dx: mdx,
+                mouse_dy: mdy,
+                keys_held: *keys_held_for_loop.borrow(),
+            };
+            app_instance.update(&frame_input);
+
             let aspect_ratio = app.aspect_ratio;
             let fb_w = app.width as f32;
             let fb_h = app.height as f32;
             let frame = app.current_frame as usize;
-            let ts = app.current_timestamp;
             let jitter_x = app.jitter_pattern[(frame % JITTER_SIZE) * 2] / fb_w;
             let jitter_y = app.jitter_pattern[(frame % JITTER_SIZE) * 2 + 1] / fb_h;
+
+            let cam = &app_instance.descriptor().camera;
+            app.camera.set_fov(cam.fov);
             app.camera.set_aspect(aspect_ratio);
             app.camera.set_jitter(jitter_x, jitter_y);
-            let cam_pos = glam::Vec3::new(-10.0, 1.7, -10.0);
-            let look_at = glam::Vec3::new(0.0, 1.7, 0.0);
-            app.camera.look_at(cam_pos, look_at, glam::Vec3::NEG_Y);
+            app.camera.look_at(cam.position, cam.target, cam.up);
             app.camera.update();
 
             if app.use_stereo {
-                let ar = app.aspect_ratio;
-                app.stereo_camera.look_at(cam_pos, look_at, glam::Vec3::NEG_Y);
-                app.stereo_camera.set_aspect(ar);
+                app.stereo_camera.look_at(cam.position, cam.target, cam.up);
+                app.stereo_camera.set_aspect(aspect_ratio);
                 app.stereo_camera.update();
             }
 
@@ -269,7 +342,6 @@ impl App {
             };
 
             let time_s = (app.current_timestamp / 1000.0) as f32;
-            let mut app_instance = app_instance_rc.borrow_mut();
             let width = app.width;
             let height = app.height;
 
@@ -361,14 +433,11 @@ impl App {
                         gpu.run_taa_pass(&mut encoder, gbuffer, history_index);
                     }
                     let resolve_view = gbuffer.resolve_view();
-                    let bloom_view = gbuffer.bloom_view();
-                    let blur_view = gbuffer.blur_view();
-                    let bw = gbuffer.bloom_width();
-                    let bh = gbuffer.bloom_height();
                     if ENABLE_POST && ENABLE_TAA {
-                        gpu.run_brightness_pass(&mut encoder, &resolve_view, &bloom_view, bw, bh);
-                        gpu.run_blur_pass(&mut encoder, &bloom_view, &blur_view, bw, bh);
-                        gpu.run_screen_pass(&mut encoder, &resolve_view, &blur_view, &swap_view);
+                        gpu.run_bloom_passes(&mut encoder, &resolve_view, gbuffer);
+                        let bloom_mip0 = gbuffer.bloom_mip_view(0);
+                        let cam_dir = views[0].direction();
+                        gpu.run_screen_pass(&mut encoder, &resolve_view, &bloom_mip0, &swap_view, [cam_dir.x, cam_dir.y, cam_dir.z]);
                     } else {
                         let source = if ENABLE_TAA { &resolve_view } else { &color_view };
                         gpu.run_present_pass(&mut encoder, source, &swap_view);

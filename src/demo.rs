@@ -1,5 +1,5 @@
 use crate::app::{App, AppInstance};
-use crate::scene::Scene;
+use crate::scene::{FrameInput, Scene, SceneDescriptor};
 use crate::scene1::Scene1;
 use wasm_bindgen::JsCast;
 use web_sys::CanvasRenderingContext2d;
@@ -24,6 +24,16 @@ impl AppInstance for Demo {
         log!("Initializing scenes...");
         let scene1 = Box::new(Scene1::new(app));
         self.scenes.push(scene1);
+    }
+
+    fn descriptor(&self) -> &SceneDescriptor {
+        self.scenes[self.current_scene].descriptor()
+    }
+
+    fn update(&mut self, input: &FrameInput) {
+        if self.current_scene < self.scenes.len() {
+            self.scenes[self.current_scene].update(input);
+        }
     }
 
     fn frame(

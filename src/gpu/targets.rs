@@ -1,6 +1,9 @@
-//! Render targets: G-buffer (color, depth reversed-Z, velocity), TAA history, resolve.
+//! Render targets: G-buffer (color, depth reversed-Z, velocity), TAA history, resolve, bloom mip chain.
 
-/// One set of G-buffer + TAA + blur for a single viewport.
+pub const BLOOM_MIP_LEVELS: usize = 5;
+pub const BLOOM_MIP_COUNT: usize = BLOOM_MIP_LEVELS + 1;
+
+/// One set of G-buffer + TAA + bloom mip chain for a single viewport.
 #[derive(Debug)]
 pub struct GbufferSet {
     pub color: wgpu::Texture,
@@ -9,10 +12,8 @@ pub struct GbufferSet {
     pub resolve: wgpu::Texture,
     /// Ping-pong: [0] and [1] for TAA history.
     pub history: [wgpu::Texture; 2],
-    /// Half-res for bloom brightness extraction.
-    pub bloom: wgpu::Texture,
-    /// Half-res Kawase blur output.
-    pub blur: wgpu::Texture,
+    /// Bloom mip chain: [0..4] are downsample levels (1/2 .. 1/32), [5] is lens output (same size as [4]).
+    pub bloom_mips: [wgpu::Texture; BLOOM_MIP_COUNT],
     pub width: u32,
     pub height: u32,
 }
@@ -33,18 +34,16 @@ impl GbufferSet {
     pub fn history_view(&self, index: usize) -> wgpu::TextureView {
         self.history[index].create_view(&Default::default())
     }
-    pub fn bloom_view(&self) -> wgpu::TextureView {
-        self.bloom.create_view(&Default::default())
-    }
-    pub fn blur_view(&self) -> wgpu::TextureView {
-        self.blur.create_view(&Default::default())
+    pub fn bloom_mip_view(&self, index: usize) -> wgpu::TextureView {
+        self.bloom_mips[index].create_view(&Default::default())
     }
 
-    pub fn bloom_width(&self) -> u32 {
-        (self.width / 2).max(1)
-    }
-    pub fn bloom_height(&self) -> u32 {
-        (self.height / 2).max(1)
+    /// Width/height of a bloom mip level (0-based, where 0 = half-res).
+    pub fn bloom_mip_size(&self, index: usize) -> (u32, u32) {
+        let shift = (index.min(BLOOM_MIP_LEVELS - 1) + 1) as u32;
+        let w = (self.width >> shift).max(1);
+        let h = (self.height >> shift).max(1);
+        (w, h)
     }
 
     /// Create or recreate targets for the given size. Uses reversed-Z depth (GREATER, clear 0).
@@ -111,36 +110,34 @@ impl GbufferSet {
                 view_formats: &[],
             }),
         ];
-        let bw = (width / 2).max(1);
-        let bh = (height / 2).max(1);
-        let bloom = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("bloom"),
-            size: wgpu::Extent3d { width: bw, height: bh, depth_or_array_layers: 1 },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
+
+        const BLOOM_MIP_LABELS: [&str; BLOOM_MIP_COUNT] = [
+            "bloom_mip_0", "bloom_mip_1", "bloom_mip_2", "bloom_mip_3", "bloom_mip_4", "bloom_lens",
+        ];
+        let bloom_mips = std::array::from_fn(|i| {
+            let (w, h) = {
+                let shift = (i.min(BLOOM_MIP_LEVELS - 1) + 1) as u32;
+                ((width >> shift).max(1), (height >> shift).max(1))
+            };
+            device.create_texture(&wgpu::TextureDescriptor {
+                label: Some(BLOOM_MIP_LABELS[i]),
+                size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba16Float,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            })
         });
-        let blur = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("blur"),
-            size: wgpu::Extent3d { width: bw, height: bh, depth_or_array_layers: 1 },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
+
         Self {
             color,
             depth,
             velocity,
             resolve,
             history,
-            bloom,
-            blur,
+            bloom_mips,
             width,
             height,
         }

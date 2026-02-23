@@ -6,7 +6,7 @@ use std::rc::Rc;
 use crate::view::ViewState;
 use wgpu::util::DeviceExt;
 
-use super::targets::GbufferSet;
+use super::targets::{GbufferSet, BLOOM_MIP_LEVELS};
 use super::warehouse::{WarehouseUniforms, FULLSCREEN_TRIANGLE};
 
 const WAREHOUSE_WGSL: &str = include_str!("../wgsl/warehouse.wgsl");
@@ -15,7 +15,16 @@ const TAA_WGSL: &str = include_str!("../wgsl/taa.wgsl");
 const PRESENT_WGSL: &str = include_str!("../wgsl/present.wgsl");
 const BRIGHTNESS_WGSL: &str = include_str!("../wgsl/brightness.wgsl");
 const BLUR_WGSL: &str = include_str!("../wgsl/blur.wgsl");
+const BLUR_UPSAMPLE_WGSL: &str = include_str!("../wgsl/blur_upsample.wgsl");
+const LENS_WGSL: &str = include_str!("../wgsl/lens.wgsl");
 const SCREEN_PARITY_WGSL: &str = include_str!("../wgsl/screen_parity.wgsl");
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ScreenUniforms {
+    pub camera_dir: [f32; 3],
+    pub _pad: f32,
+}
 
 /// Device, queue, surface, and adapter (for resize config). Created once via [init_gpu].
 pub struct GpuContext {
@@ -23,7 +32,6 @@ pub struct GpuContext {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub surface: wgpu::Surface<'static>,
-    /// Last configured surface size; reconfigure when app size changes.
     config_size: (u32, u32),
     pub surface_format: wgpu::TextureFormat,
     warehouse_pipeline: wgpu::RenderPipeline,
@@ -36,21 +44,21 @@ pub struct GpuContext {
     taa_bind_group_layout: wgpu::BindGroupLayout,
     present_pipeline: wgpu::RenderPipeline,
     present_bind_group_layout: wgpu::BindGroupLayout,
+    /// Shared layout for all single-texture fullscreen passes (brightness, downsample, upsample, lens).
+    bloom_tex_sampler_layout: wgpu::BindGroupLayout,
     brightness_pipeline: wgpu::RenderPipeline,
-    brightness_bind_group_layout: wgpu::BindGroupLayout,
-    blur_pipeline: wgpu::RenderPipeline,
-    blur_bind_group_layout: wgpu::BindGroupLayout,
+    downsample_pipeline: wgpu::RenderPipeline,
+    upsample_pipeline: wgpu::RenderPipeline,
+    lens_pipeline: wgpu::RenderPipeline,
     screen_pipeline: wgpu::RenderPipeline,
     screen_bind_group_layout: wgpu::BindGroupLayout,
-    /// TAA ping-pong: 0 or 1, flip each frame.
+    screen_uniform_buffer: wgpu::Buffer,
     taa_history_index: usize,
-    /// Depth for main pass (warehouse + cubes) when not using gbuffer. Reversed Z (clear 0).
     main_depth: Option<(wgpu::Texture, wgpu::TextureView)>,
     main_depth_size: (u32, u32),
 }
 
 impl GpuContext {
-    /// Ensures the surface is configured for the given size. Call on resize and before get_current_texture.
     pub fn configure_surface(&mut self, width: u32, height: u32) {
         if width == 0 || height == 0 {
             return;
@@ -82,12 +90,10 @@ impl GpuContext {
         }
     }
 
-    /// Returns the main-pass depth view if present (same size as current config). Use for depth when drawing cubes.
     pub fn main_depth_view(&self) -> Option<&wgpu::TextureView> {
         self.main_depth.as_ref().map(|(_, v)| v)
     }
 
-    /// Clears the current swap chain texture to the given color and presents. Call each frame when no other passes run.
     pub fn render_clear(&mut self, width: u32, height: u32) {
         self.configure_surface(width, height);
 
@@ -130,8 +136,6 @@ impl GpuContext {
         frame.present();
     }
 
-    /// Records the warehouse raymarch fullscreen pass into the current render pass.
-    /// When `background_only` is true, shader outputs solid gray (no raymarch); use when warehouse is disabled so cubes draw on top.
     pub fn draw_warehouse(
         &self,
         pass: &mut wgpu::RenderPass,
@@ -150,7 +154,6 @@ impl GpuContext {
         pass.draw(0..3, 0..1);
     }
 
-    /// Same as [draw_warehouse] but uses the G-buffer pipeline (2 color + depth). Use in a pass with color+velocity+depth attachments.
     pub fn draw_warehouse_gbuffer(
         &self,
         pass: &mut wgpu::RenderPass,
@@ -168,8 +171,6 @@ impl GpuContext {
         pass.draw(0..3, 0..1);
     }
 
-    /// Ensures a [GbufferSet] exists for the given size (for mono). Recreates on resize.
-    /// Stores the result in `gbuffer_rc` so the caller can borrow it separately from `self`.
     pub fn ensure_gbuffer(&mut self, width: u32, height: u32, gbuffer_rc: &Rc<RefCell<Option<GbufferSet>>>) {
         if width == 0 || height == 0 {
             panic!("ensure_gbuffer called with zero size");
@@ -184,14 +185,12 @@ impl GpuContext {
         }
     }
 
-    /// Returns current TAA history index and flips it for next frame.
     pub fn taa_history_index(&mut self) -> usize {
         let i = self.taa_history_index;
         self.taa_history_index = 1 - self.taa_history_index;
         i
     }
 
-    /// Records TAA resolve pass: read color + velocity + history, write resolve + updated history. Ping-pong: history_read_index 0 or 1.
     pub fn run_taa_pass(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -263,88 +262,108 @@ impl GpuContext {
         }
     }
 
-    /// Records brightness pass: resolve -> bloom (half-res). viewport_w/h = bloom size.
-    pub fn run_brightness_pass(
+    /// Helper: runs a single-texture fullscreen pass (brightness, downsample, upsample, or lens).
+    fn run_fullscreen_tex_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        label: &str,
+        pipeline: &wgpu::RenderPipeline,
+        source_view: &wgpu::TextureView,
+        target_view: &wgpu::TextureView,
+        viewport_w: u32,
+        viewport_h: u32,
+    ) {
+        let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(label),
+            layout: &self.bloom_tex_sampler_layout,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(source_view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.linear_sampler) },
+            ],
+        });
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some(label),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: target_view,
+                resolve_target: None,
+                ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            multiview_mask: None,
+            occlusion_query_set: None,
+        });
+        pass.set_viewport(0.0, 0.0, viewport_w as f32, viewport_h as f32, 0.0, 1.0);
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(0, &bg, &[]);
+        pass.set_vertex_buffer(0, self.fullscreen_vertex_buffer.slice(..));
+        pass.draw(0..3, 0..1);
+    }
+
+    /// Runs the full bloom mip chain: brightness+downsample, downsample loop, lens, upsample loop.
+    pub fn run_bloom_passes(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         resolve_view: &wgpu::TextureView,
-        bloom_view: &wgpu::TextureView,
-        viewport_w: u32,
-        viewport_h: u32,
+        gbuffer: &GbufferSet,
     ) {
-        let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("brightness_bg"),
-            layout: &self.brightness_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(resolve_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.linear_sampler) },
-            ],
-        });
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("brightness"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: bloom_view,
-                resolve_target: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
-                depth_slice: None,
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            multiview_mask: None,
-            occlusion_query_set: None,
-        });
-        pass.set_viewport(0.0, 0.0, viewport_w as f32, viewport_h as f32, 0.0, 1.0);
-        pass.set_pipeline(&self.brightness_pipeline);
-        pass.set_bind_group(0, &bg, &[]);
-        pass.set_vertex_buffer(0, self.fullscreen_vertex_buffer.slice(..));
-        pass.draw(0..3, 0..1);
+        let n_downsample = BLOOM_MIP_LEVELS - 1; // 4
+
+        // 1. Brightness extraction + initial downsample: resolve -> mip[0]
+        let mip0_view = gbuffer.bloom_mip_view(0);
+        let (w, h) = gbuffer.bloom_mip_size(0);
+        self.run_fullscreen_tex_pass(
+            encoder, "bloom_brightness", &self.brightness_pipeline,
+            resolve_view, &mip0_view, w, h,
+        );
+
+        // 2. Downsample chain: mip[i] -> mip[i+1]
+        for i in 0..n_downsample {
+            let src_view = gbuffer.bloom_mip_view(i);
+            let dst_view = gbuffer.bloom_mip_view(i + 1);
+            let (w, h) = gbuffer.bloom_mip_size(i + 1);
+            self.run_fullscreen_tex_pass(
+                encoder, "bloom_downsample", &self.downsample_pipeline,
+                &src_view, &dst_view, w, h,
+            );
+        }
+
+        // 3. Lens flare pass: mip[4] -> mip[5]
+        let lens_src = gbuffer.bloom_mip_view(BLOOM_MIP_LEVELS - 1);
+        let lens_dst = gbuffer.bloom_mip_view(BLOOM_MIP_LEVELS);
+        let (w, h) = gbuffer.bloom_mip_size(BLOOM_MIP_LEVELS);
+        self.run_fullscreen_tex_pass(
+            encoder, "bloom_lens", &self.lens_pipeline,
+            &lens_src, &lens_dst, w, h,
+        );
+
+        // 4. Upsample chain: mip[i+1] -> mip[i], first iteration reads from mip[5] (lens output)
+        for j in 0..n_downsample {
+            let i = n_downsample - 1 - j;
+            let src_idx = if j == 0 { BLOOM_MIP_LEVELS } else { i + 1 };
+            let src_view = gbuffer.bloom_mip_view(src_idx);
+            let dst_view = gbuffer.bloom_mip_view(i);
+            let (w, h) = gbuffer.bloom_mip_size(i);
+            self.run_fullscreen_tex_pass(
+                encoder, "bloom_upsample", &self.upsample_pipeline,
+                &src_view, &dst_view, w, h,
+            );
+        }
     }
 
-    /// Records blur pass: bloom -> blur (same size). viewport_w/h = bloom size.
-    pub fn run_blur_pass(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        bloom_view: &wgpu::TextureView,
-        blur_view: &wgpu::TextureView,
-        viewport_w: u32,
-        viewport_h: u32,
-    ) {
-        let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("blur_bg"),
-            layout: &self.blur_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(bloom_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.linear_sampler) },
-            ],
-        });
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("blur"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: blur_view,
-                resolve_target: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
-                depth_slice: None,
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            multiview_mask: None,
-            occlusion_query_set: None,
-        });
-        pass.set_viewport(0.0, 0.0, viewport_w as f32, viewport_h as f32, 0.0, 1.0);
-        pass.set_pipeline(&self.blur_pipeline);
-        pass.set_bind_group(0, &bg, &[]);
-        pass.set_vertex_buffer(0, self.fullscreen_vertex_buffer.slice(..));
-        pass.draw(0..3, 0..1);
-    }
-
-    /// Records screen pass: resolve + bloom -> swap chain. Tonemap, add bloom, vignette.
+    /// Records screen pass: resolve + bloom mip[0] -> swap chain. ACES tonemap, sRGB, starburst, vignette.
     pub fn run_screen_pass(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         resolve_view: &wgpu::TextureView,
         bloom_view: &wgpu::TextureView,
         swap_chain_view: &wgpu::TextureView,
+        camera_dir: [f32; 3],
     ) {
+        let uniforms = ScreenUniforms { camera_dir, _pad: 0.0 };
+        self.queue.write_buffer(&self.screen_uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
+
         let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("screen_bg"),
             layout: &self.screen_bind_group_layout,
@@ -352,6 +371,7 @@ impl GpuContext {
                 wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(resolve_view) },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(bloom_view) },
                 wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.linear_sampler) },
+                wgpu::BindGroupEntry { binding: 3, resource: self.screen_uniform_buffer.as_entire_binding() },
             ],
         });
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -376,7 +396,6 @@ impl GpuContext {
         pass.draw(0..3, 0..1);
     }
 
-    /// Records present pass: fullscreen sample resolve texture and draw to swap_chain_view.
     pub fn run_present_pass(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -426,10 +445,6 @@ impl GpuContext {
     }
 }
 
-/// Async init: request adapter, request device, create surface from canvas.
-/// On wasm32 the canvas is used with [wgpu::SurfaceTarget::Canvas].
-/// Returns None if adapter or device request fails (e.g. WebGPU not available).
-/// On non-wasm32 returns None (no window/canvas integration yet).
 pub async fn init_gpu(canvas: web_sys::HtmlCanvasElement) -> Option<GpuContext> {
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         #[cfg(target_arch = "wasm32")]
@@ -485,10 +500,18 @@ pub async fn init_gpu(canvas: web_sys::HtmlCanvasElement) -> Option<GpuContext> 
         create_taa_and_present_pipelines(&device, surface_format);
 
     #[cfg(target_arch = "wasm32")]
-    log!("[GPU] Creating post pipelines (brightness, blur, screen)...");
+    log!("[GPU] Creating post pipelines (brightness, downsample, upsample, lens, screen)...");
     #[cfg(target_arch = "wasm32")]
-    let (brightness_pipeline, brightness_bind_group_layout, blur_pipeline, blur_bind_group_layout, screen_pipeline, screen_bind_group_layout) =
-        create_post_pipelines(&device, surface_format);
+    let (
+        bloom_tex_sampler_layout,
+        brightness_pipeline,
+        downsample_pipeline,
+        upsample_pipeline,
+        lens_pipeline,
+        screen_pipeline,
+        screen_bind_group_layout,
+        screen_uniform_buffer,
+    ) = create_post_pipelines(&device, surface_format);
     #[cfg(target_arch = "wasm32")]
     log!("[GPU] All pipelines created.");
 
@@ -510,12 +533,14 @@ pub async fn init_gpu(canvas: web_sys::HtmlCanvasElement) -> Option<GpuContext> 
         taa_bind_group_layout,
         present_pipeline,
         present_bind_group_layout,
+        bloom_tex_sampler_layout,
         brightness_pipeline,
-        brightness_bind_group_layout,
-        blur_pipeline,
-        blur_bind_group_layout,
+        downsample_pipeline,
+        upsample_pipeline,
+        lens_pipeline,
         screen_pipeline,
         screen_bind_group_layout,
+        screen_uniform_buffer,
         taa_history_index: 0,
         main_depth: None,
         main_depth_size: (0, 0),
@@ -587,21 +612,23 @@ fn create_warehouse_pipelines(
             usage: wgpu::BufferUsages::VERTEX,
         });
 
+    let vb_layout = wgpu::VertexBufferLayout {
+        array_stride: 8,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &[wgpu::VertexAttribute {
+            offset: 0,
+            shader_location: 0,
+            format: wgpu::VertexFormat::Float32x2,
+        }],
+    };
+
     let warehouse_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("warehouse"),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: Some("vs"),
-            buffers: &[wgpu::VertexBufferLayout {
-                array_stride: 8,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &[wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x2,
-                }],
-            }],
+            buffers: &[vb_layout.clone()],
             compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
@@ -633,15 +660,7 @@ fn create_warehouse_pipelines(
         vertex: wgpu::VertexState {
             module: &shader_gbuffer,
             entry_point: Some("vs"),
-            buffers: &[wgpu::VertexBufferLayout {
-                array_stride: 8,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &[wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x2,
-                }],
-            }],
+            buffers: &[vb_layout],
             compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
@@ -756,37 +775,28 @@ fn create_taa_and_present_pipelines(
         bind_group_layouts: &[&taa_bind_group_layout],
         immediate_size: 0,
     });
+
+    let vb_layout = wgpu::VertexBufferLayout {
+        array_stride: 8,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &[wgpu::VertexAttribute { offset: 0, shader_location: 0, format: wgpu::VertexFormat::Float32x2 }],
+    };
+
     let taa_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("taa"),
         layout: Some(&taa_pipeline_layout),
         vertex: wgpu::VertexState {
             module: &taa_shader,
             entry_point: Some("vs"),
-            buffers: &[wgpu::VertexBufferLayout {
-                array_stride: 8,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &[wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x2,
-                }],
-            }],
+            buffers: &[vb_layout.clone()],
             compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
             module: &taa_shader,
             entry_point: Some("fs"),
             targets: &[
-                Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba16Float,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                }),
-                Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba16Float,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                }),
+                Some(wgpu::ColorTargetState { format: wgpu::TextureFormat::Rgba16Float, blend: None, write_mask: wgpu::ColorWrites::ALL }),
+                Some(wgpu::ColorTargetState { format: wgpu::TextureFormat::Rgba16Float, blend: None, write_mask: wgpu::ColorWrites::ALL }),
             ],
             compilation_options: Default::default(),
         }),
@@ -833,25 +843,13 @@ fn create_taa_and_present_pipelines(
         vertex: wgpu::VertexState {
             module: &present_shader,
             entry_point: Some("vs"),
-            buffers: &[wgpu::VertexBufferLayout {
-                array_stride: 8,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &[wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x2,
-                }],
-            }],
+            buffers: &[vb_layout],
             compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
             module: &present_shader,
             entry_point: Some("fs"),
-            targets: &[Some(wgpu::ColorTargetState {
-                format: surface_format,
-                blend: None,
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
+            targets: &[Some(wgpu::ColorTargetState { format: surface_format, blend: None, write_mask: wgpu::ColorWrites::ALL })],
             compilation_options: Default::default(),
         }),
         primitive: wgpu::PrimitiveState::default(),
@@ -861,13 +859,7 @@ fn create_taa_and_present_pipelines(
         multiview_mask: None,
     });
 
-    (
-        taa_pipeline,
-        taa_bind_group_layout,
-        present_pipeline,
-        present_bind_group_layout,
-        linear_sampler,
-    )
+    (taa_pipeline, taa_bind_group_layout, present_pipeline, present_bind_group_layout, linear_sampler)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -875,19 +867,17 @@ fn create_post_pipelines(
     device: &wgpu::Device,
     surface_format: wgpu::TextureFormat,
 ) -> (
-    wgpu::RenderPipeline,
     wgpu::BindGroupLayout,
     wgpu::RenderPipeline,
-    wgpu::BindGroupLayout,
+    wgpu::RenderPipeline,
+    wgpu::RenderPipeline,
+    wgpu::RenderPipeline,
     wgpu::RenderPipeline,
     wgpu::BindGroupLayout,
+    wgpu::Buffer,
 ) {
-    let brightness_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("brightness"),
-        source: wgpu::ShaderSource::Wgsl(BRIGHTNESS_WGSL.into()),
-    });
-    let brightness_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("brightness_layout"),
+    let bloom_tex_sampler_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("bloom_tex_sampler_layout"),
         entries: &[
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
@@ -907,101 +897,57 @@ fn create_post_pipelines(
             },
         ],
     });
-    let brightness_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("brightness_pl"),
-        bind_group_layouts: &[&brightness_layout],
+    let bloom_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("bloom_pl"),
+        bind_group_layouts: &[&bloom_tex_sampler_layout],
         immediate_size: 0,
     });
-    let brightness_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("brightness"),
-        layout: Some(&brightness_pl),
-        vertex: wgpu::VertexState {
-            module: &brightness_shader,
-            entry_point: Some("vs"),
-            buffers: &[wgpu::VertexBufferLayout {
-                array_stride: 8,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &[wgpu::VertexAttribute { offset: 0, shader_location: 0, format: wgpu::VertexFormat::Float32x2 }],
-            }],
-            compilation_options: Default::default(),
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &brightness_shader,
-            entry_point: Some("fs"),
-            targets: &[Some(wgpu::ColorTargetState {
-                format: wgpu::TextureFormat::Rgba16Float,
-                blend: None,
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-            compilation_options: Default::default(),
-        }),
-        primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
-        cache: None,
-        multiview_mask: None,
-    });
 
-    let blur_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("blur"),
-        source: wgpu::ShaderSource::Wgsl(BLUR_WGSL.into()),
-    });
-    let blur_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("blur_layout"),
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
-                },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                count: None,
-            },
-        ],
-    });
-    let blur_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("blur_pl"),
-        bind_group_layouts: &[&blur_layout],
-        immediate_size: 0,
-    });
-    let blur_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("blur"),
-        layout: Some(&blur_pl),
-        vertex: wgpu::VertexState {
-            module: &blur_shader,
-            entry_point: Some("vs"),
-            buffers: &[wgpu::VertexBufferLayout {
-                array_stride: 8,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &[wgpu::VertexAttribute { offset: 0, shader_location: 0, format: wgpu::VertexFormat::Float32x2 }],
-            }],
-            compilation_options: Default::default(),
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &blur_shader,
-            entry_point: Some("fs"),
-            targets: &[Some(wgpu::ColorTargetState {
-                format: wgpu::TextureFormat::Rgba16Float,
-                blend: None,
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-            compilation_options: Default::default(),
-        }),
-        primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
-        cache: None,
-        multiview_mask: None,
-    });
+    let vb_layout = wgpu::VertexBufferLayout {
+        array_stride: 8,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &[wgpu::VertexAttribute { offset: 0, shader_location: 0, format: wgpu::VertexFormat::Float32x2 }],
+    };
+    let bloom_target = [Some(wgpu::ColorTargetState {
+        format: wgpu::TextureFormat::Rgba16Float,
+        blend: None,
+        write_mask: wgpu::ColorWrites::ALL,
+    })];
 
+    let make_bloom_pipeline = |label: &'static str, source: &str| -> wgpu::RenderPipeline {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some(label),
+            source: wgpu::ShaderSource::Wgsl(source.into()),
+        });
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(label),
+            layout: Some(&bloom_pl),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs"),
+                buffers: &[vb_layout.clone()],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs"),
+                targets: &bloom_target,
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            cache: None,
+            multiview_mask: None,
+        })
+    };
+
+    let brightness_pipeline = make_bloom_pipeline("brightness", BRIGHTNESS_WGSL);
+    let downsample_pipeline = make_bloom_pipeline("downsample", BLUR_WGSL);
+    let upsample_pipeline = make_bloom_pipeline("upsample", BLUR_UPSAMPLE_WGSL);
+    let lens_pipeline = make_bloom_pipeline("lens", LENS_WGSL);
+
+    // Screen pipeline: 2 textures + sampler + uniform buffer
     let screen_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("screen_parity"),
         source: wgpu::ShaderSource::Wgsl(SCREEN_PARITY_WGSL.into()),
@@ -1035,6 +981,16 @@ fn create_post_pipelines(
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
         ],
     });
     let screen_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -1048,11 +1004,7 @@ fn create_post_pipelines(
         vertex: wgpu::VertexState {
             module: &screen_shader,
             entry_point: Some("vs"),
-            buffers: &[wgpu::VertexBufferLayout {
-                array_stride: 8,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &[wgpu::VertexAttribute { offset: 0, shader_location: 0, format: wgpu::VertexFormat::Float32x2 }],
-            }],
+            buffers: &[vb_layout],
             compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
@@ -1072,12 +1024,21 @@ fn create_post_pipelines(
         multiview_mask: None,
     });
 
+    let screen_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("screen_uniforms"),
+        size: std::mem::size_of::<ScreenUniforms>() as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+
     (
+        bloom_tex_sampler_layout,
         brightness_pipeline,
-        brightness_layout,
-        blur_pipeline,
-        blur_layout,
+        downsample_pipeline,
+        upsample_pipeline,
+        lens_pipeline,
         screen_pipeline,
         screen_layout,
+        screen_uniform_buffer,
     )
 }

@@ -6,9 +6,15 @@ use crate::ecs::{FrameResources, World};
 use crate::fast_rand::FastRand;
 use crate::line_2d_strip::Line2DStrip;
 use crate::particles::Particles;
-use crate::scene::Scene;
+use crate::scene::{CameraDescriptor, FrameInput, Scene, SceneDescriptor};
 use crate::view::ViewState;
 use glam::{Mat4, Vec3};
+use std::f32::consts::FRAC_PI_2;
+use std::f32::consts::FRAC_PI_4;
+
+const MOUSE_SENSITIVITY: f32 = 0.002;
+const MOVE_SPEED: f32 = 5.0;
+const MAX_PITCH: f32 = 1.5;
 
 const CHUNK_N: usize = 16;
 
@@ -37,6 +43,11 @@ pub struct Scene1 {
     world: World,
     /// Reused every frame for instanced draw (filled by half_cube_render_system).
     model_matrices: Vec<Mat4>,
+
+    descriptor: SceneDescriptor,
+
+    yaw: f32,
+    pitch: f32,
 }
 
 impl Scene1 {
@@ -61,7 +72,7 @@ impl Scene1 {
         for _ in 0..N_CUBES {
             let base_position = BasePosition(Vec3::new(
                 4.0 * (pos_rng.urand() * 2.0 - 1.0),
-                2.0 * (pos_rng.urand() * 2.0 - 1.0) - 4.0,
+                4.0 * (pos_rng.urand() * 2.0 - 1.0) + 2.5,
                 4.0 * (pos_rng.urand() * 2.0 - 1.0),
             ));
             let mut axis = Vec3::new(
@@ -95,11 +106,51 @@ impl Scene1 {
             chunk_mesh,
             world,
             model_matrices,
+            descriptor: SceneDescriptor {
+                camera: CameraDescriptor {
+                    position: Vec3::new(-10.0, 1.7, -10.0),
+                    target: Vec3::new(0.0, 1.7, 0.0),
+                    up: Vec3::Y,
+                    fov: FRAC_PI_2,
+                },
+            },
+            yaw: FRAC_PI_4,
+            pitch: 0.0,
         }
     }
 }
 
 impl Scene for Scene1 {
+    fn descriptor(&self) -> &SceneDescriptor {
+        &self.descriptor
+    }
+
+    fn update(&mut self, input: &FrameInput) {
+        self.yaw -= input.mouse_dx * MOUSE_SENSITIVITY;
+        self.pitch = (self.pitch - input.mouse_dy * MOUSE_SENSITIVITY).clamp(-MAX_PITCH, MAX_PITCH);
+
+        let forward = Vec3::new(self.yaw.sin(), 0.0, self.yaw.cos());
+        let right = Vec3::new(-self.yaw.cos(), 0.0, self.yaw.sin());
+
+        let dt = (input.delta_time / 1000.0) as f32;
+        let speed = MOVE_SPEED * dt;
+        let mut movement = Vec3::ZERO;
+        if input.key(FrameInput::KEY_W) { movement += forward * speed; }
+        if input.key(FrameInput::KEY_S) { movement -= forward * speed; }
+        if input.key(FrameInput::KEY_D) { movement += right * speed; }
+        if input.key(FrameInput::KEY_A) { movement -= right * speed; }
+        if input.key(FrameInput::KEY_SPACE) { movement.y += speed; }
+        if input.key(FrameInput::KEY_SHIFT) { movement.y -= speed; }
+        self.descriptor.camera.position += movement;
+
+        let dir = Vec3::new(
+            self.pitch.cos() * self.yaw.sin(),
+            self.pitch.sin(),
+            self.pitch.cos() * self.yaw.cos(),
+        );
+        self.descriptor.camera.target = self.descriptor.camera.position + dir;
+    }
+
     fn on_frame(
         &mut self,
         app: &mut App,
