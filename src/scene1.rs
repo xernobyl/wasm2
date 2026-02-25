@@ -8,7 +8,7 @@ use crate::line_2d_strip::Line2DStrip;
 use crate::particles::Particles;
 use crate::scene::{CameraDescriptor, FrameInput, Scene, SceneDescriptor};
 use crate::view::ViewState;
-use glam::{Mat4, Vec3};
+use glam::Vec3;
 use std::f32::consts::FRAC_PI_2;
 use std::f32::consts::FRAC_PI_4;
 
@@ -41,8 +41,8 @@ pub struct Scene1 {
 
     /// ECS world: entities and components (moving half-cubes).
     world: World,
-    /// Reused every frame for instanced draw (filled by half_cube_render_system).
-    model_matrices: Vec<Mat4>,
+    /// Reused every frame for instanced draw (filled by half_cube_render_system). Packed [x,y,z,scale] per instance.
+    instance_data: Vec<f32>,
 
     descriptor: SceneDescriptor,
 
@@ -96,7 +96,7 @@ impl Scene1 {
             world.spawn_moving_half_cube(base_position, motion, half_cube);
         }
 
-        let model_matrices = Vec::with_capacity(N_CUBES);
+        let instance_data = Vec::with_capacity(N_CUBES * 4);
 
         Self {
             line_strip: Line2DStrip::new(),
@@ -105,7 +105,7 @@ impl Scene1 {
             rng,
             chunk_mesh,
             world,
-            model_matrices,
+            instance_data,
             descriptor: SceneDescriptor {
                 camera: CameraDescriptor {
                     position: Vec3::new(-10.0, 1.7, -10.0),
@@ -175,7 +175,7 @@ impl Scene for Scene1 {
             &self.world,
             &resources,
             app,
-            &mut self.model_matrices,
+            &mut self.instance_data,
             pass,
             is_gbuffer,
         );

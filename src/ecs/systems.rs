@@ -1,51 +1,49 @@
 //! Systems: logic that runs over world and resources.
 //! Each system is a pure function (world, resources, app) for testability and clarity.
 
-use glam::{Mat4, Vec3};
+use glam::Vec3;
 use wgpu::RenderPass;
 
 use crate::app::App;
 use crate::ecs::resources::FrameResources;
 use crate::ecs::world::World;
-use crate::utils;
 
-/// Builds model matrices for moving half-cubes. Each instance is translation + scale only;
-/// the vertex shader flips the 3 stored faces by camera octant so they look like a full cube.
+/// Builds packed instance data (x, y, z, scale) for moving half-cubes and draws.
+/// The vertex shader flips the 3 stored faces by camera octant so they look like a full cube.
 pub fn half_cube_render_system(
     world: &World,
     resources: &FrameResources<'_>,
     app: &mut App,
-    model_matrices: &mut Vec<Mat4>,
+    instance_data: &mut Vec<f32>,
     pass: Option<&mut RenderPass<'_>>,
     is_gbuffer: bool,
 ) {
     let view = resources.view;
     let time_s = resources.time_s;
 
-    model_matrices.clear();
-    model_matrices.reserve(world.moving_half_cube_count());
+    instance_data.clear();
+    instance_data.reserve(world.moving_half_cube_count() * 4);
 
     for (base_pos, axis, phase, amplitude, speed, scale) in world.moving_cubes.iter() {
         let offset = axis * (amplitude * (time_s * speed + phase).sin());
         let pos = base_pos + offset;
-        let scale_mat = Mat4::from_scale(Vec3::splat(scale));
-        let model = Mat4::from_translation(pos) * scale_mat;
-        model_matrices.push(model);
+        instance_data.push(pos.x);
+        instance_data.push(pos.y);
+        instance_data.push(pos.z);
+        instance_data.push(scale);
     }
 
-    if model_matrices.is_empty() {
+    if instance_data.is_empty() {
         return;
     }
 
-    app.cube
-        .update_model(utils::as_f32_slice(model_matrices.as_slice(), 4 * 4));
+    app.cube.update_instances(instance_data);
+    let count = instance_data.len() / 4;
     if is_gbuffer {
         if let Some(p) = pass {
-            app.cube
-                .draw_instanced_gbuffer(p, view, model_matrices.len() as i32);
+            app.cube.draw_instanced_gbuffer(p, view, count as i32);
         }
     } else {
-        app.cube
-            .draw_instanced(model_matrices.len() as i32, pass, view);
+        app.cube.draw_instanced(count as i32, pass, view);
     }
 }

@@ -1,4 +1,7 @@
 //! Half-cube mesh: 3 visible faces, instanced. WebGPU-backed with same public API.
+//!
+//! Phase 5 (future): A compute shader can frustum-cull the instance storage buffer into a
+//! smaller "visible instances" buffer; the render pass then draws only visible_count instances.
 
 use wgpu::RenderPass;
 use wgpu::util::DeviceExt;
@@ -42,7 +45,7 @@ pub struct HalfCubeGpu {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     index_count: u32,
-    instance_buffer: wgpu::Buffer,
+    instance_storage_buffer: wgpu::Buffer,
     view_projection_buffer: wgpu::Buffer,
     view_projection_gbuffer_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
@@ -66,10 +69,10 @@ impl HalfCube {
         }
     }
 
-    /// Upload instance model matrices (16 floats per matrix). No-op if WebGPU not in use.
-    pub fn update_model(&mut self, matrices: &[f32]) {
+    /// Upload packed instance data: [x, y, z, scale] per instance (4 floats each). No-op if WebGPU not in use.
+    pub fn update_instances(&mut self, data: &[f32]) {
         if let Some(ref mut g) = self.inner {
-            g.upload_instances(matrices);
+            g.upload_instances(data);
         }
     }
 
@@ -117,16 +120,28 @@ impl HalfCubeGpu {
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("cube_bind_layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: std::num::NonZeroU64::new(16),
+                    },
+                    count: None,
+                },
+            ],
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -154,20 +169,26 @@ impl HalfCubeGpu {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("cube_instances"),
-            size: (MAX_INSTANCES * 16 * 4) as u64,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        let instance_storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("cube_instances_storage"),
+            size: (MAX_INSTANCES * 16) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("cube_bind_group"),
             layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: view_projection_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: view_projection_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: instance_storage_buffer.as_entire_binding(),
+                },
+            ],
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -176,43 +197,15 @@ impl HalfCubeGpu {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs"),
-                buffers: &[
-                    wgpu::VertexBufferLayout {
-                        array_stride: 12,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &[wgpu::VertexAttribute {
-                            offset: 0,
-                            shader_location: 0,
-                            format: wgpu::VertexFormat::Float32x3,
-                        }],
-                    },
-                    wgpu::VertexBufferLayout {
-                        array_stride: 64,
-                        step_mode: wgpu::VertexStepMode::Instance,
-                        attributes: &[
-                            wgpu::VertexAttribute {
-                                offset: 0,
-                                shader_location: 2,
-                                format: wgpu::VertexFormat::Float32x4,
-                            },
-                            wgpu::VertexAttribute {
-                                offset: 16,
-                                shader_location: 3,
-                                format: wgpu::VertexFormat::Float32x4,
-                            },
-                            wgpu::VertexAttribute {
-                                offset: 32,
-                                shader_location: 4,
-                                format: wgpu::VertexFormat::Float32x4,
-                            },
-                            wgpu::VertexAttribute {
-                                offset: 48,
-                                shader_location: 5,
-                                format: wgpu::VertexFormat::Float32x4,
-                            },
-                        ],
-                    },
-                ],
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: 12,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &[wgpu::VertexAttribute {
+                        offset: 0,
+                        shader_location: 0,
+                        format: wgpu::VertexFormat::Float32x3,
+                    }],
+                }],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -225,7 +218,10 @@ impl HalfCubeGpu {
                 })],
                 compilation_options: Default::default(),
             }),
-            primitive: wgpu::PrimitiveState::default(),
+            primitive: wgpu::PrimitiveState {
+                cull_mode: None,
+                ..Default::default()
+            },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: true,
@@ -251,10 +247,16 @@ impl HalfCubeGpu {
         let bind_group_gbuffer = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("cube_bind_group_gbuffer"),
             layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: view_projection_gbuffer_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: view_projection_gbuffer_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: instance_storage_buffer.as_entire_binding(),
+                },
+            ],
         });
         let pipeline_gbuffer = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("cube_gbuffer"),
@@ -262,23 +264,11 @@ impl HalfCubeGpu {
             vertex: wgpu::VertexState {
                 module: &shader_gbuffer,
                 entry_point: Some("vs"),
-                buffers: &[
-                    wgpu::VertexBufferLayout {
-                        array_stride: 12,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &[wgpu::VertexAttribute { offset: 0, shader_location: 0, format: wgpu::VertexFormat::Float32x3 }],
-                    },
-                    wgpu::VertexBufferLayout {
-                        array_stride: 64,
-                        step_mode: wgpu::VertexStepMode::Instance,
-                        attributes: &[
-                            wgpu::VertexAttribute { offset: 0, shader_location: 2, format: wgpu::VertexFormat::Float32x4 },
-                            wgpu::VertexAttribute { offset: 16, shader_location: 3, format: wgpu::VertexFormat::Float32x4 },
-                            wgpu::VertexAttribute { offset: 32, shader_location: 4, format: wgpu::VertexFormat::Float32x4 },
-                            wgpu::VertexAttribute { offset: 48, shader_location: 5, format: wgpu::VertexFormat::Float32x4 },
-                        ],
-                    },
-                ],
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: 12,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &[wgpu::VertexAttribute { offset: 0, shader_location: 0, format: wgpu::VertexFormat::Float32x3 }],
+                }],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -290,7 +280,10 @@ impl HalfCubeGpu {
                 ],
                 compilation_options: Default::default(),
             }),
-            primitive: wgpu::PrimitiveState::default(),
+            primitive: wgpu::PrimitiveState {
+                cull_mode: None,
+                ..Default::default()
+            },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: true,
@@ -309,7 +302,7 @@ impl HalfCubeGpu {
             vertex_buffer,
             index_buffer,
             index_count: INDICES.len() as u32,
-            instance_buffer,
+            instance_storage_buffer,
             view_projection_buffer,
             view_projection_gbuffer_buffer,
             bind_group,
@@ -318,15 +311,15 @@ impl HalfCubeGpu {
         }
     }
 
-    fn upload_instances(&self, matrices: &[f32]) {
-        // matrices is num_instances * 16 floats
-        let instance_count = matrices.len() / 16;
+    fn upload_instances(&self, data: &[f32]) {
+        // data is num_instances * 4 floats (x, y, z, scale each)
+        let instance_count = data.len() / 4;
         let count = instance_count.min(MAX_INSTANCES);
         if count == 0 {
             return;
         }
-        let bytes = bytemuck::cast_slice::<f32, u8>(&matrices[..count * 16]);
-        self.queue.write_buffer(&self.instance_buffer, 0, bytes);
+        let bytes = bytemuck::cast_slice::<f32, u8>(&data[..count * 4]);
+        self.queue.write_buffer(&self.instance_storage_buffer, 0, bytes);
     }
 
     fn draw(&self, pass: &mut RenderPass<'_>, view: &crate::view::ViewState, count: u32) {
@@ -349,7 +342,6 @@ impl HalfCubeGpu {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
         pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         pass.draw_indexed(0..self.index_count, 0, 0..count);
     }
@@ -384,7 +376,6 @@ impl HalfCubeGpu {
         pass.set_pipeline(&self.pipeline_gbuffer);
         pass.set_bind_group(0, &self.bind_group_gbuffer, &[]);
         pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
         pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         pass.draw_indexed(0..self.index_count, 0, 0..count);
     }
